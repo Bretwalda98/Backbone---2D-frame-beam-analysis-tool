@@ -18,14 +18,17 @@
   <div class="max-w-[1400px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-4">
     <!-- Sidebar: model inputs -->
     <aside class="card bg-white p-4 space-y-4">
-      <header class="flex items-center justify-between">
-        <h1 class="text-xl font-semibold">Backbone (MVP)</h1>
-        <span class="text-xs text-zinc-500">HTML + JS + math.js</span>
+      <header class="flex items-center justify-between gap-2">
+        <div>
+          <h1 class="text-xl font-semibold">Backbone (MVP)</h1>
+          <span class="text-xs text-zinc-500">HTML + JS + math.js</span>
+        </div>
+        <button id="btnHelp" class="no-print px-3 py-2 rounded-xl bg-sky-600 text-white hover:bg-sky-500">Help</button>
       </header>
 
-      <div class="grid grid-cols-2 gap-2">
-        <button id="btnSample" class="no-print px-3 py-2 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800">Load sample</button>
-        <button id="btnRun" class="no-print px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500">Run analysis</button>
+      <div class="grid grid-cols-3 gap-2">
+        <button id="btnSample" class="no-print px-3 py-2 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 col-span-2">Load sample</button>
+        <button id="btnRun" class="no-print px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500">Run</button>
       </div>
 
       <!-- Example cases -->
@@ -78,7 +81,7 @@
       </section>
 
       <section class="text-xs text-zinc-500">
-        <p><span class="font-semibold">Tip:</span> This MVP mirrors Backbone’s flow: define nodes → bars → supports → loads → run → use the spy.</p>
+        <p><span class="font-semibold">Tip:</span> Flow is: Materials → Nodes → Bars → Supports → Loads → Run.</p>
       </section>
     </aside>
 
@@ -101,7 +104,7 @@
             Scale (×): <input id="deflScaleInput" type="number" step="0.1" value="1" class="w-20 text-xs border rounded p-0.5"/>
           </div>
           <canvas id="viewDefl" class="w-full h-[300px] bg-zinc-100 rounded-xl mt-2"></canvas>
-          <div class="mt-1 text-[11px] text-zinc-500">Green line = displaced centerline × scale.</div>
+          <div class="mt-1 text-[11px] text-zinc-500">Green line = displaced centreline × scale.</div>
         </div>
 
         <div class="card bg-white p-4">
@@ -126,6 +129,81 @@
       </section>
     </main>
   </div>
+
+  <!-- ====================== HELP MODAL ====================== -->
+  <div id="helpOverlay" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 no-print">
+    <div class="bg-white rounded-2xl shadow-xl max-w-3xl w-[92%] p-6 overflow-y-auto max-h-[85vh]">
+      <div class="flex items-start justify-between mb-3">
+        <h2 class="text-xl font-semibold">Backbone – Quick Help</h2>
+        <button id="helpClose" class="p-2 rounded-lg hover:bg-zinc-100" aria-label="Close help">✕</button>
+      </div>
+
+      <div class="prose prose-zinc max-w-none text-sm">
+        <h3>What this does</h3>
+        <p>
+          Backbone solves 2D frame/beam problems (plane x–z). Define geometry, supports, and loads; then compute nodal displacements and member end actions. Three panels show: Geometry, Deflection (scaled), and a qualitative End-Moment diagram.
+        </p>
+
+        <h3>Unit system & sign convention</h3>
+        <ul>
+          <li><strong>Lengths</strong>: metres (m). Areas m², second moment of area m⁴.</li>
+          <li><strong>Loads</strong>: kN (Fx right +, Fz down +), moments kNm (+ counter-clockwise).</li>
+          <li><strong>Materials</strong>: E in GPa (converted to Pa internally).</li>
+          <li>UDL <em>w</em> is kN/m acting globally downwards (−z direction). Projection to local axis is approximated (MVP).</li>
+        </ul>
+
+        <h3>Workflow (left → right)</h3>
+        <ol>
+          <li><strong>Materials</strong> – Add/edit materials. Default steel is provided. E controls stiffness; ρ is informational.</li>
+          <li><strong>Nodes</strong> – Add node coordinates in metres. The Geometry panel rescales automatically.</li>
+          <li><strong>Bars</strong> – Connect node <em>i</em> to node <em>j</em>; pick a material; set cross-section <em>A</em> and <em>I</em>.
+            <ul>
+              <li><em>Releases</em>: toggle <code>i-rz</code> or <code>j-rz</code> to pin that end (no moment transfer) – implemented via a big-number method.</li>
+            </ul>
+          </li>
+          <li><strong>Supports</strong> – Choose node and tick restrained DOFs (<code>ux</code>, <code>uz</code>, <code>rz</code>). A fixed base has all three ticked.</li>
+          <li><strong>Loads</strong> – Add:
+            <ul>
+              <li><em>Node loads</em> (Fx, Fz, M) in kN / kNm.</li>
+              <li><em>Bar UDL</em> <code>w</code> in kN/m (downward in global Z). The solver applies equivalent end forces.</li>
+            </ul>
+          </li>
+          <li><strong>Run</strong> – Click <em>Run</em> to solve. Use examples to sanity-check behaviour.</li>
+        </ol>
+
+        <h3>Reading the outputs</h3>
+        <ul>
+          <li><strong>Result spy – Nodes</strong>: Translations are in metres (displayed in scientific notation); rotation <code>Rz</code> is shown in mrad.</li>
+          <li><strong>Deflection panel</strong>: Grey = original, green = displaced centreline; set a visual <em>Scale (×)</em> for clarity.</li>
+          <li><strong>Moment panel</strong>: Purple polygon connects end moments <code>Mi</code>→<code>Mj</code> along the bar’s local normal. Use <em>px per kNm</em> to scale.</li>
+        </ul>
+
+        <h3>Tips</h3>
+        <ul>
+          <li>Start simple (one span with a single load) before building frames.</li>
+          <li>If the model is unstable, the solver will warn you. Add missing restraints or pin releases.</li>
+          <li>Use the <em>Zoom (m/px)</em> field to set an explicit geometry scale; leave blank for auto.</li>
+        </ul>
+
+        <h3>Known limitations (MVP)</h3>
+        <ul>
+          <li>UDL projection to local axes is simplified via <code>w_local ≈ w * cos(θ)</code>.</li>
+          <li>Only rotational end releases are supported; axial/shear releases are not in this MVP.</li>
+          <li>Moment diagram is qualitative between ends (linear join of <code>Mi</code> to <code>Mj</code>), not a full continuous diagram.</li>
+        </ul>
+
+        <h3>Quick start</h3>
+        <ol>
+          <li>Click <em>Load sample</em>.</li>
+          <li>Press <em>Run</em>.</li>
+          <li>Adjust deflection scale and moment scaling to suit.</li>
+        </ol>
+
+        <p class="text-xs text-zinc-500">Backbone MVP © You. For engineering use, always validate with hand checks and codes of practice.</p>
+      </div>
+    </div>
+  </div>
+  <!-- ==================== END HELP MODAL ==================== -->
 
 <script>
 // --------------------------- Data Model ---------------------------
@@ -442,7 +520,7 @@ function draw(){
   for(const n of model.nodes){
     ctx.fillStyle='#0ea5e9'; ctx.beginPath(); ctx.arc(X(n.x), Z(n.z), 4, 0, Math.PI*2); ctx.fill();
   }
-  // supports
+  // supports (simple base glyph)
   for(const s of model.supports){
     const n = model.nodes.find(n=>n.id===s.node); if(!n) continue;
     ctx.fillStyle='#111827';
@@ -530,7 +608,7 @@ function run(){
 
   // ---------- Spy tables ----------
   const NR = document.getElementById('nodeResults');
-  NR.innerHTML = '<div class="mb-1">Displacements (U in mm, θ in mrad)</div>';
+  NR.innerHTML = '<div class="mb-1">Displacements (U in m, θ in mrad)</div>';
   let html = '<table class="w-full"><tr class="text-zinc-500"><th class="text-left">Node</th><th>Ux</th><th>Uz</th><th>Rz</th></tr>';
   for(const n of model.nodes){
     const ui = U.get([(n.id-1)*3+0,0]);
@@ -620,10 +698,21 @@ function loadTwoSpan(){
   renderAll();
 }
 
+// --------------------------- Help modal wiring ---------------------------
+function openHelp(){ document.getElementById('helpOverlay').classList.remove('hidden'); document.getElementById('helpOverlay').classList.add('flex'); }
+function closeHelp(){ document.getElementById('helpOverlay').classList.add('hidden'); document.getElementById('helpOverlay').classList.remove('flex'); }
+
 // --------------------------- Init ---------------------------
 function init(){
   document.getElementById('btnSample').addEventListener('click', loadSample);
   document.getElementById('btnRun').addEventListener('click', run);
+
+  // Help modal events
+  document.getElementById('btnHelp').addEventListener('click', openHelp);
+  document.getElementById('helpClose').addEventListener('click', closeHelp);
+  document.getElementById('helpOverlay').addEventListener('click', (e)=>{ if(e.target.id==='helpOverlay') closeHelp(); });
+  window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeHelp(); });
+
   if(model.materials.length===0) addMaterial();
   if(model.nodes.length===0){ addNode(); addNode(); }
   draw();
