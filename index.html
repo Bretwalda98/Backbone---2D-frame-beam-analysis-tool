@@ -3,94 +3,108 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Backbone – 2D Frame/Beam (Inline Only)</title>
+<title>Backbone – 2D Frame/Beam (Inline • Reactive • Buckling)</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 <style>
   :root{
-    --bg:#0b1220; --card:#0f172a; --card2:#0b152e; --muted:#aab4c7; --text:#eef2ff;
+    --bg:#0b1220; --card:#0f172a; --muted:#aab4c7; --text:#eef2ff;
     --line:#263652; --accent:#67e8f9; --good:#10b981; --warn:#eab308; --bad:#ef4444;
     --purple:#a78bfa; --green:#34d399; --blue:#60a5fa;
-    --plot-bg:#20324f;           /* lighter canvas bg */
-    --plot-grid:#345079;         /* grid lines */
-    --plot-frame:#476896;        /* outer frame */
-    --plot-text:#e2e8f0;         /* brighter labels */
+    --plot-bg:#e9f0fb; --plot-grid:#b7c7e3; --plot-frame:#6a86b2;
   }
   html,body{height:100%}
   body{background:var(--bg); color:var(--text)}
   .card{border-radius:1rem; background:var(--card); box-shadow:0 10px 24px rgba(0,0,0,.25); border:1px solid var(--line)}
-  .card2{border-radius:1rem; background:var(--plot-bg); box-shadow:inset 0 0 0 1px var(--line)}
+  .subcard{border-radius:.8rem; background:#0c162a; border:1px solid var(--line)}
   .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
   input, select{background:#0b1220;border:1px solid var(--line); color:var(--text); border-radius:.5rem; padding:.35rem .5rem}
   input[type="number"]{text-align:right}
   .btn{border-radius:.75rem; padding:.35rem .6rem; border:1px solid var(--line); background:#0b152e; font-size:12px}
   .btn:hover{background:#0e1b39}
-  .btn-primary{background:#0b2a35; border-color:#134e4a; color:#a7f3d0}
-  .btn-primary:hover{background:#0d3644}
   .chip{display:inline-block; padding:.25rem .5rem; border-radius:.5rem; background:#0b1b35; border:1px solid var(--line); color:#a1a1aa}
   .tbl{width:100%; border-collapse:collapse}
   .tbl th,.tbl td{padding:6px 8px; border-bottom:1px solid var(--line); text-align:right; font-variant-numeric:tabular-nums}
   .tbl th:first-child,.tbl td:first-child{text-align:left}
-  @media print {.no-print{display:none!important} .card{box-shadow:none;border:1px solid #555}}
-  canvas{image-rendering:crisp-edges}
+  .stack-plot{width:100%; height:240px; border-radius:.75rem; background:var(--plot-bg); box-shadow:inset 0 0 0 1px var(--plot-frame)}
   #tt{position:fixed; pointer-events:none; padding:.25rem .5rem; border-radius:.375rem; background:rgba(15,23,42,.9); color:#fff; font-size:11px; z-index:60}
   #tt.hidden{display:none}
-  .stack-plot{width:100%; height:240px; border-radius:.75rem; background:var(--plot-bg); box-shadow:inset 0 0 0 1px var(--plot-frame)}
+  .help{color:var(--muted); font-size:12px}
+  .u-bad{color:#ef4444; font-weight:600}
+  .u-warn{color:#f59e0b; font-weight:600}
+  .u-good{color:#10b981; font-weight:600}
 </style>
 </head>
 <body>
-  <div class="max-w-[1500px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-4">
+  <div class="max-w-[1500px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-[420px,1fr] gap-4">
+    <!-- Sidebar -->
     <aside class="card p-4 space-y-4">
       <header class="flex items-center justify-between gap-2">
         <div>
           <h1 class="text-xl font-semibold">Backbone (MVP)</h1>
           <span class="text-xs text-[var(--muted)]">2D Frame/Beam • HTML + JS + math.js</span>
         </div>
-        <button id="btnHelp" class="no-print btn btn-primary">Help</button>
       </header>
 
-      <div class="grid grid-cols-3 gap-2">
-        <button id="btnSample" class="no-print btn col-span-2">Load sample</button>
-        <button id="btnRun" class="no-print btn-primary">Run</button>
-      </div>
-
-      <section>
-        <h2 class="font-semibold mb-1">Example cases</h2>
-        <div class="space-y-2">
-          <button onclick="loadCantilever()" class="btn w-full text-left">Cantilever beam with point load</button>
-          <button onclick="loadSimplySupported()" class="btn w-full text-left">Simply supported beam with UDL</button>
-          <button onclick="loadPortalFrame()" class="btn w-full text-left">Portal frame with lateral load</button>
-          <button onclick="loadTwoSpan()" class="btn w-full text-left">Two-span continuous beam with point load</button>
-        </div>
+      <!-- Examples dropdown -->
+      <section class="subcard p-3">
+        <h2 class="font-semibold mb-2">Examples</h2>
+        <label class="text-sm">Choose a case
+          <select id="exampleSelect" class="w-full mt-1">
+            <option value="">— Select an example —</option>
+            <option value="cantilever">Cantilever beam with point load</option>
+            <option value="ss_udl">Simply supported beam with UDL</option>
+            <option value="portal">Portal frame with lateral load</option>
+            <option value="two_span">Two-span continuous beam with point load</option>
+            <option value="spmt">SPMT spine beam – 6-line (Scheuerle) with 390Z PPU</option>
+          </select>
+        </label>
       </section>
 
-      <section>
-        <h2 class="font-semibold mb-1">Materials</h2>
+      <!-- Materials -->
+      <section class="subcard p-3 space-y-2">
+        <h2 class="font-semibold">Materials</h2>
+        <div class="help">Pick from the library to add, or edit values below. (E in GPa, ρ in kN/m³, f<sub>y</sub> in MPa)</div>
+        <label class="text-sm">Add from library
+          <select id="matLibAdd" class="w-full mt-1">
+            <option value="">— Select a material to add —</option>
+          </select>
+        </label>
         <div class="space-y-2" id="materials"></div>
-        <button class="no-print text-sm text-[var(--accent)]" onclick="addMaterial()">+ Add material</button>
+        <button class="no-print text-sm text-[var(--accent)]" onclick="addMaterial()">+ Add custom material</button>
       </section>
 
-      <section>
-        <h2 class="font-semibold mb-1">Nodes</h2>
+      <!-- Sections library note -->
+      <section class="subcard p-3 space-y-2">
+        <h2 class="font-semibold">Sections library</h2>
+        <div class="help">Choose a section for each bar; it auto-fills A and I (m², m⁴). Families: SHS/RHS, CHS, I-beam (approx), Plate, Round.</div>
+      </section>
+
+      <!-- Nodes -->
+      <section class="subcard p-3">
+        <h2 class="font-semibold mb-2">Nodes</h2>
         <div id="nodes" class="space-y-2"></div>
         <button class="no-print text-sm text-[var(--accent)]" onclick="addNode()">+ Add node</button>
       </section>
 
-      <section>
-        <h2 class="font-semibold mb-1">Bars</h2>
+      <!-- Bars -->
+      <section class="subcard p-3">
+        <h2 class="font-semibold mb-2">Bars</h2>
         <div id="bars" class="space-y-2"></div>
         <button class="no-print text-sm text-[var(--accent)]" onclick="addBar()">+ Add bar</button>
       </section>
 
-      <section>
-        <h2 class="font-semibold mb-1">Supports</h2>
+      <!-- Supports -->
+      <section class="subcard p-3">
+        <h2 class="font-semibold mb-2">Supports</h2>
         <div id="supports" class="space-y-2"></div>
         <button class="no-print text-sm text-[var(--accent)]" onclick="addSupport()">+ Add support</button>
       </section>
 
-      <section>
-        <h2 class="font-semibold mb-1">Loads</h2>
-        <p class="text-xs text-[var(--muted)]">Node loads: Fx (kN +→), Fz (kN ↓), M (kNm +ccw). UDL: w (kN/m ↓) in global Z.</p>
+      <!-- Loads -->
+      <section class="subcard p-3">
+        <h2 class="font-semibold mb-2">Loads</h2>
+        <p class="text-xs text-[var(--muted)] mb-1">Node loads: Fx (kN +→), Fz (kN ↓), M (kNm +ccw). UDL: w (kN/m ↓) in global Z.</p>
         <div id="nodeloads" class="space-y-2"></div>
         <button class="no-print text-sm text-[var(--accent)] mr-3" onclick="addNodeLoad()">+ Add node load</button>
         <div id="udlloads" class="mt-2 space-y-2"></div>
@@ -98,15 +112,32 @@
       </section>
     </aside>
 
+    <!-- Main -->
     <main class="space-y-4">
+      <!-- KPI Tiles -->
       <section class="grid md:grid-cols-4 gap-4">
-        <div class="card p-4"><div class="text-[var(--muted)] text-xs mb-1">Max deflection</div><div id="kpiDefl" class="text-2xl font-semibold">–</div><div id="kpiDeflLoc" class="text-xs text-[var(--muted)] mt-1">–</div></div>
-        <div class="card p-4"><div class="text-[var(--muted)] text-xs mb-1">Max bending moment</div><div id="kpiMoment" class="text-2xl font-semibold">–</div><div id="kpiMomentLoc" class="text-xs text-[var(--muted)] mt-1">–</div></div>
-        <div class="card p-4"><div class="text-[var(--muted)] text-xs mb-1">Max shear force</div><div id="kpiShear" class="text-2xl font-semibold">–</div><div id="kpiShearLoc" class="text-xs text-[var(--muted)] mt-1">–</div></div>
-        <div class="card p-4"><div class="text-[var(--muted)] text-xs mb-1">Elements</div><div id="kpiElems" class="text-2xl font-semibold">–</div></div>
+        <div class="card p-4">
+          <div class="text-[var(--muted)] text-xs mb-1">Max deflection</div>
+          <div id="kpiDefl" class="text-2xl font-semibold">–</div>
+          <div id="kpiDeflLoc" class="text-xs text-[var(--muted)] mt-1">–</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-[var(--muted)] text-xs mb-1">Max bending moment</div>
+          <div id="kpiMoment" class="text-2xl font-semibold">–</div>
+          <div id="kpiMomentLoc" class="text-xs text-[var(--muted)] mt-1">–</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-[var(--muted)] text-xs mb-1">Max shear force</div>
+          <div id="kpiShear" class="text-2xl font-semibold">–</div>
+          <div id="kpiShearLoc" class="text-xs text-[var(--muted)] mt-1">–</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-[var(--muted)] text-xs mb-1">Elements</div>
+          <div id="kpiElems" class="text-2xl font-semibold">–</div>
+        </div>
       </section>
 
-      <!-- Stacked inline only -->
+      <!-- Stacked graphs -->
       <section id="stackedSection" class="space-y-3">
         <div class="card p-4">
           <div class="flex items-center gap-2 mb-2">
@@ -119,13 +150,52 @@
         </div>
 
         <div class="grid grid-cols-1 gap-3">
-          <div class="card p-4"><div class="flex items-center justify-between"><h2 class="font-semibold">Normal force</h2><span class="text-xs text-[var(--muted)]">N [kN] (up positive)</span></div><canvas id="stackNormal" class="stack-plot"></canvas></div>
-          <div class="card p-4"><div class="flex items-center justify-between"><h2 class="font-semibold">Shear force</h2><span class="text-xs text-[var(--muted)]">V [kN] (positive up)</span></div><canvas id="stackShear" class="stack-plot"></canvas></div>
-          <div class="card p-4"><div class="flex items-center justify-between"><h2 class="font-semibold">Bending moment</h2><span class="text-xs text-[var(--muted)]">M [kNm] (sagging +)</span></div><canvas id="stackMoment" class="stack-plot"></canvas></div>
-          <div class="card p-4"><div class="flex items-center justify-between"><h2 class="font-semibold">Deflection</h2><div class="flex items-center text-xs text-[var(--muted)]">Scale (×): <input id="deflScaleInput" type="number" step="0.1" value="1" class="w-20 ml-1"/></div></div><canvas id="stackDeflection" class="stack-plot"></canvas></div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold">Normal force</h2>
+              <span class="text-xs text-[var(--muted)]">N [kN]</span>
+            </div>
+            <canvas id="stackNormal" class="stack-plot"></canvas>
+          </div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold">Shear force</h2>
+              <span class="text-xs text-[var(--muted)]">V [kN]</span>
+            </div>
+            <canvas id="stackShear" class="stack-plot"></canvas>
+          </div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold">Bending moment</h2>
+              <span class="text-xs text-[var(--muted)]">M [kNm]</span>
+            </div>
+            <canvas id="stackMoment" class="stack-plot"></canvas>
+          </div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold">Deflection</h2>
+              <div class="flex items-center text-xs text-[var(--muted)]">Scale (×):
+                <input id="deflScaleInput" type="number" step="0.1" value="1" class="w-20 ml-1" oninput="touch()"/>
+              </div>
+            </div>
+            <canvas id="stackDeflection" class="stack-plot"></canvas>
+          </div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold">Buckling (compression)</h2>
+              <span class="text-xs text-[var(--muted)]">η = N<sub>Ed</sub>/N<sub>b,Rd</sub> [–]</span>
+            </div>
+            <canvas id="stackBuckling" class="stack-plot"></canvas>
+            <div class="text-xs text-[var(--muted)] mt-1">Bars in compression are shown; vertical members are emphasized.</div>
+          </div>
         </div>
       </section>
 
+      <!-- Results tabs -->
       <section class="card p-4">
         <h2 class="font-semibold mb-2">Results</h2>
         <div class="flex gap-2 border-b border-[var(--line)] pb-2 mb-3 text-sm">
@@ -133,6 +203,7 @@
           <button class="tab px-3 py-1" data-tab="reactions">Reactions</button>
           <button class="tab px-3 py-1" data-tab="nodes">Nodes</button>
           <button class="tab px-3 py-1" data-tab="bars">Bars</button>
+          <button class="tab px-3 py-1" data-tab="buckling">Buckling</button>
         </div>
         <div id="tabContainer" class="mono text-xs overflow-auto max-h-64"></div>
         <div class="mt-3 flex gap-2">
@@ -146,133 +217,228 @@
   <div id="tt" class="hidden"></div>
 
 <script>
-/* ====================== Model and helpers ====================== */
+/* ====================== Libraries (with fy) ====================== */
+const materialLibrary = [
+  {name:'Steel S235', E:210, rho:78.5, fy:235},
+  {name:'Steel S275', E:210, rho:78.5, fy:275},
+  {name:'Steel S355', E:210, rho:78.5, fy:355},
+  {name:'Steel S460', E:210, rho:78.5, fy:460},
+  {name:'Stainless 304', E:193, rho:79.0, fy:205},
+  {name:'Aluminium 6061-T6', E:69, rho:27.0, fy:276},
+  {name:'Aluminium 6082-T6', E:69, rho:27.0, fy:250},
+];
+
+function mm2(mm){ return mm/1000; }
+function A_rect(b_mm,h_mm){ const b=mm2(b_mm), h=mm2(h_mm); return b*h; }
+function I_rect(b_mm,h_mm){ const b=mm2(b_mm), h=mm2(h_mm); return b*Math.pow(h,3)/12; }
+function A_shs(b_mm,t_mm){ const b=mm2(b_mm), t=mm2(t_mm); return b*b - (b-2*t)*(b-2*t); }
+function I_shs(b_mm,t_mm){ const b=mm2(b_mm), t=mm2(t_mm); const I_outer = Math.pow(b,4)/12; const bi=b-2*t; const I_inner = Math.pow(bi,4)/12; return I_outer - I_inner; }
+function A_rhs(b_mm,h_mm,t_mm){ const b=mm2(b_mm), h=mm2(h_mm), t=mm2(t_mm); return b*h - (b-2*t)*(h-2*t); }
+function I_rhs(b_mm,h_mm,t_mm){ const b=mm2(b_mm), h=mm2(h_mm), t=mm2(t_mm); const I_outer = b*Math.pow(h,3)/12; const bi=b-2*t, hi=h-2*t; const I_inner = bi*Math.pow(hi,3)/12; return I_outer - I_inner; }
+function A_chs(D_mm,t_mm){ const D=mm2(D_mm), t=mm2(t_mm); const d=D-2*t; return Math.PI/4*(D*D - d*d); }
+function I_chs(D_mm,t_mm){ const D=mm2(D_mm), t=mm2(t_mm); const d=D-2*t; return Math.PI/64*(Math.pow(D,4) - Math.pow(d,4)); }
+function A_round(D_mm){ const D=mm2(D_mm); return Math.PI/4*(D*D); }
+function I_round(D_mm){ const D=mm2(D_mm); return Math.PI/64*Math.pow(D,4); }
+function A_ibeam(bf_mm,tf_mm,hw_mm,tw_mm){ const bf=mm2(bf_mm), tf=mm2(tf_mm), hw=mm2(hw_mm), tw=mm2(tw_mm); return 2*bf*tf + hw*tw; }
+function I_ibeam(bf_mm,tf_mm,hw_mm,tw_mm){
+  const bf=mm2(bf_mm), tf=mm2(tf_mm), hw=mm2(hw_mm), tw=mm2(tw_mm);
+  const h = 2*tf + hw;
+  const Iflange = (bf*Math.pow(tf,3)/12) + bf*tf*Math.pow((h/2-tf/2),2);
+  const Iweb    = (tw*Math.pow(hw,3)/12);
+  return 2*Iflange + Iweb;
+}
+
+const sectionsLib = [
+  {group:'SHS', items:[
+    {key:'SHS 50x50x3',  A:A_shs(50,3),  I:I_shs(50,3)},
+    {key:'SHS 60x60x3',  A:A_shs(60,3),  I:I_shs(60,3)},
+    {key:'SHS 80x80x4',  A:A_shs(80,4),  I:I_shs(80,4)},
+    {key:'SHS 100x100x5',A:A_shs(100,5), I:I_shs(100,5)},
+    {key:'SHS 150x150x6.3',A:A_shs(150,6.3), I:I_shs(150,6.3)},
+  ]},
+  {group:'RHS', items:[
+    {key:'RHS 100x50x4', A:A_rhs(100,50,4), I:I_rhs(100,50,4)},
+    {key:'RHS 150x50x5', A:A_rhs(150,50,5), I:I_rhs(150,50,5)},
+    {key:'RHS 150x100x5',A:A_rhs(150,100,5),I:I_rhs(150,100,5)},
+    {key:'RHS 200x100x6.3',A:A_rhs(200,100,6.3),I:I_rhs(200,100,6.3)},
+  ]},
+  {group:'CHS', items:[
+    {key:'CHS 48.3x3.2',  A:A_chs(48.3,3.2),  I:I_chs(48.3,3.2)},
+    {key:'CHS 60.3x3.6',  A:A_chs(60.3,3.6),  I:I_chs(60.3,3.6)},
+    {key:'CHS 88.9x5.0',  A:A_chs(88.9,5.0),  I:I_chs(88.9,5.0)},
+    {key:'CHS 114.3x6.3', A:A_chs(114.3,6.3), I:I_chs(114.3,6.3)},
+    {key:'CHS 168.3x8.0', A:A_chs(168.3,8.0), I:I_chs(168.3,8.0)},
+  ]},
+  {group:'I-beam (approx)', items:[
+    {key:'I 203x133x25', A:A_ibeam(133,7.5,188,5.7), I:I_ibeam(133,7.5,188,5.7)},
+    {key:'I 254x146x37', A:A_ibeam(146,9.0,236,6.6), I:I_ibeam(146,9.0,236,6.6)},
+    {key:'I 305x165x46', A:A_ibeam(165,10.0,285,7.5),I:I_ibeam(165,10.0,285,7.5)},
+    {key:'I 356x171x57', A:A_ibeam(171,11.0,330,8.1),I:I_ibeam(171,11.0,330,8.1)},
+  ]},
+  {group:'Rectangular (solid)', items:[
+    {key:'Plate 100x10', A:A_rect(100,10), I:I_rect(100,10)},
+    {key:'Plate 150x12', A:A_rect(150,12), I:I_rect(150,12)},
+    {key:'Plate 200x15', A:A_rect(200,15), I:I_rect(200,15)},
+  ]},
+  {group:'Round (solid)', items:[
+    {key:'Ø30', A:A_round(30), I:I_round(30)},
+    {key:'Ø50', A:A_round(50), I:I_round(50)},
+    {key:'Ø80', A:A_round(80), I:I_round(80)},
+  ]},
+];
+
+/* ====================== Data model, UI, solver, results = same as v1 (shortened commentary) ====================== */
+/* The rest of the JS is essentially identical to v1, with two key changes:
+   1) Titles use default text color (so they're clearly visible on dark cards).
+   2) A new stacked canvas "stackBuckling" is drawn from per-bar EC3 buckling utilization (η).
+*/
+</script>
+
+<!-- The remainder of the script is long; we will include the full working version from v1 and add the buckling plot. -->
+<script>
+/* ====================== Data Model ====================== */
 const model = { materials: [], nodes: [], bars: [], supports: [], nodeloads: [], udls: [] };
 function mkRow(html){ const d=document.createElement('div'); d.className='grid grid-cols-12 gap-2 items-center'; d.innerHTML=html; return d; }
 function num(v){ v = parseFloat(v); return isFinite(v)? v : 0; }
 function inferSupportType(s){ if (s.ux && s.uz && !s.rz) return 'pin'; if (!s.ux && s.uz && !s.rz) return 'rollerZ'; if (s.ux && s.uz && s.rz) return 'fixed'; return 'custom'; }
-function applySupportType(s, type){ s.type = type; if (type==='pin'){s.ux=true;s.uz=true;s.rz=false;} else if (type==='rollerZ'){s.ux=false;s.uz=true;s.rz=false;} else if (type==='fixed'){s.ux=true;s.uz=true;s.rz=true;} }
-
-/* UI builders */
-function renderMaterials(){ const host=document.getElementById('materials'); host.innerHTML=''; model.materials.forEach((m,idx)=>{ const row = mkRow(`
-  <input class="col-span-4" value="${m.name}" onchange="model.materials[${idx}].name=this.value"/>
-  <label class="col-span-4 text-xs">E (GPa)<input type="number" step="0.01" class="w-full" value="${m.E}" onchange="model.materials[${idx}].E=num(this.value)"/></label>
-  <label class="col-span-3 text-xs">ρ (kN/m³)<input type="number" step="0.01" class="w-full" value="${m.rho??0}" onchange="model.materials[${idx}].rho=num(this.value)"/></label>
-  <button class="col-span-1 text-red-400" onclick="model.materials.splice(${idx},1); renderAll()">✕</button>`); host.appendChild(row); }); }
-function renderNodes(){ const host=document.getElementById('nodes'); host.innerHTML=''; model.nodes.forEach((n,idx)=>{ const row = mkRow(`
-  <span class="col-span-2 text-sm">N${n.id}</span>
-  <label class="col-span-4 text-xs">x (m)<input type="number" step="0.001" class="w-full" value="${n.x}" onchange="model.nodes[${idx}].x=num(this.value); drawEverything()"/></label>
-  <label class="col-span-4 text-xs">z (m)<input type="number" step="0.001" class="w-full" value="${n.z}" onchange="model.nodes[${idx}].z=num(this.value); drawEverything()"/></label>
-  <button class="col-span-2 text-red-400" onclick="model.nodes.splice(${idx},1); renumber(); renderAll()">✕</button>`); host.appendChild(row); }); }
-function renderBars(){ const host=document.getElementById('bars'); host.innerHTML=''; const matOpts = model.materials.map(m=>`<option value="${m.id}">${m.name}</option>`).join(''); model.bars.forEach((b,idx)=>{ const row = mkRow(`
-  <span class="col-span-1 text-sm">B${b.id}</span>
-  <label class="col-span-2 text-xs">i<input type="number" class="w-full" value="${b.i}" onchange="model.bars[${idx}].i=parseInt(this.value)||1; drawEverything()"/></label>
-  <label class="col-span-2 text-xs">j<input type="number" class="w-full" value="${b.j}" onchange="model.bars[${idx}].j=parseInt(this.value)||1; drawEverything()"/></label>
-  <label class="col-span-3 text-xs">Mat<select class="w-full" onchange="model.bars[${idx}].matId=parseInt(this.value);">${matOpts}</select></label>
-  <label class="col-span-2 text-xs">A m² <input id="bar-${idx}-A" type="number" step="0.000001" class="w-full" value="${b.A}" oninput="model.bars[${idx}].A=num(this.value)"/></label>
-  <label class="col-span-2 text-xs">I m⁴ <input id="bar-${idx}-I" type="number" step="0.000000001" class="w-full" value="${b.I}" oninput="model.bars[${idx}].I=num(this.value)"/></label>
+function applySupportType(s, type){ s.type = type; if (type === 'pin'){ s.ux=true; s.uz=true; s.rz=false; } else if (type === 'rollerZ'){ s.ux=false; s.uz=true; s.rz=false; } else if (type === 'fixed'){ s.ux=true; s.uz=true; s.rz=true; } }
+function buildMatLib(){ const sel=document.getElementById('matLibAdd'); sel.innerHTML='<option value=\"\">— Select a material to add —</option>'; materialLibrary.forEach((m,i)=>{ const opt=document.createElement('option'); opt.value=i; opt.textContent=`${m.name} (E=${m.E} GPa, fy=${m.fy} MPa)`; sel.appendChild(opt); }); sel.addEventListener('change', (e)=>{ const idx=parseInt(e.target.value); if(Number.isFinite(idx)){ const m=materialLibrary[idx]; const id=(model.materials.at(-1)?.id||0)+1; model.materials.push({id,name:m.name,E:m.E,rho:m.rho,fy:m.fy}); renderMaterials(); touch(); e.target.value=''; } }); }
+function renderMaterials(){ const host=document.getElementById('materials'); host.innerHTML=''; model.materials.forEach((m,idx)=>{ const row = mkRow(`<span class="col-span-12 text-[var(--muted)] text-xs">M${m.id}</span>
+  <input class="col-span-5" value="${m.name}" onchange="model.materials[${idx}].name=this.value; touch()"/>
+  <label class="col-span-3 text-xs">E (GPa)<input type="number" step="0.01" class="w-full" value="${m.E}" oninput="model.materials[${idx}].E=num(this.value); touch()"/></label>
+  <label class="col-span-2 text-xs">ρ (kN/m³)<input type="number" step="0.01" class="w-full" value="${m.rho??0}" oninput="model.materials[${idx}].rho=num(this.value); touch()"/></label>
+  <label class="col-span-2 text-xs">fy (MPa)<input type="number" step="1" class="w-full" value="${m.fy??250}" oninput="model.materials[${idx}].fy=num(this.value); touch()"/></label>
+  <button class="col-span-12 text-red-400 text-left" onclick="model.materials.splice(${idx},1); renderMaterials(); touch()">✕ Remove</button>`); host.appendChild(row); }); }
+function sectionOptionsHTML(selectedKey){ let h = `<option value="">Custom (manual A, I)</option>`; sectionsLib.forEach(group=>{ h += `<optgroup label="${group.group}">`; group.items.forEach(it=>{ const sel = selectedKey===it.key ? 'selected' : ''; h += `<option value="${it.key}" ${sel}>${it.key}</option>`; }); h += `</optgroup>`; }); return h; }
+function getSectionByKey(key){ for(const g of sectionsLib){ for(const it of g.items){ if(it.key===key) return it; } } return null; }
+function renderNodes(){ const host=document.getElementById('nodes'); host.innerHTML=''; model.nodes.forEach((n,idx)=>{ const row = mkRow(`<span class="col-span-2 text-sm">N${n.id}</span>
+  <label class="col-span-5 text-xs">x (m)<input type="number" step="0.001" class="w-full" value="${n.x}" oninput="model.nodes[${idx}].x=num(this.value); touch()"/></label>
+  <label class="col-span-5 text-xs">z (m)<input type="number" step="0.001" class="w-full" value="${n.z}" oninput="model.nodes[${idx}].z=num(this.value); touch()"/></label>
+  <button class="col-span-12 text-red-400 text-left" onclick="model.nodes.splice(${idx},1); renumber(); renderAll(); touch()">✕ Remove</button>`); host.appendChild(row); }); }
+function applySectionToBar(idx, key){ const b=model.bars[idx]; b.sectionKey = key||''; if(key){ const sec=getSectionByKey(key); if(sec){ b.A=sec.A; b.I=sec.I; } } renderBars(); touch(); }
+function renderBars(){ const host=document.getElementById('bars'); host.innerHTML=''; const matOpts = model.materials.map(m=>`<option value="${m.id}">${m.name}</option>`).join(''); model.bars.forEach((b,idx)=>{ const row = mkRow(`<span class="col-span-1 text-sm">B${b.id}</span>
+  <label class="col-span-2 text-xs">i<input type="number" class="w-full" value="${b.i}" oninput="model.bars[${idx}].i=parseInt(this.value)||1; touch()"/></label>
+  <label class="col-span-2 text-xs">j<input type="number" class="w-full" value="${b.j}" oninput="model.bars[${idx}].j=parseInt(this.value)||1; touch()"/></label>
+  <label class="col-span-3 text-xs">Mat<select class="w-full" onchange="model.bars[${idx}].matId=parseInt(this.value); touch()">${matOpts}</select></label>
+  <label class="col-span-4 text-xs">Section
+    <select class="w-full" onchange="applySectionToBar(${idx}, this.value)">${sectionOptionsHTML(b.sectionKey||'')}</select>
+  </label>
+  <label class="col-span-2 text-xs">A m² <input id="bar-${idx}-A" type="number" step="0.000001" class="w-full" value="${b.A}"
+    oninput="model.bars[${idx}].A=num(this.value); model.bars[${idx}].sectionKey=''; touch()"/></label>
+  <label class="col-span-2 text-xs">I m⁴ <input id="bar-${idx}-I" type="number" step="0.000000001" class="w-full" value="${b.I}"
+    oninput="model.bars[${idx}].I=num(this.value); model.bars[${idx}].sectionKey=''; touch()"/></label>
   <div class="col-span-12 grid grid-cols-12 gap-2 text-[11px] text-[var(--muted)]">
     <span class="col-span-12">Releases (rotational hinges):</span>
-    <label class="col-span-2">i-rz <input type="checkbox" ${b.releaseI.rz?'checked':''} onchange="model.bars[${idx}].releaseI.rz=this.checked"></label>
-    <label class="col-span-2">j-rz <input type="checkbox" ${b.releaseJ.rz?'checked':''} onchange="model.bars[${idx}].releaseJ.rz=this.checked"></label>
+    <label class="col-span-2">i-rz <input type="checkbox" ${b.releaseI.rz?'checked':''} onchange="model.bars[${idx}].releaseI.rz=this.checked; touch()"></label>
+    <label class="col-span-2">j-rz <input type="checkbox" ${b.releaseJ.rz?'checked':''} onchange="model.bars[${idx}].releaseJ.rz=this.checked; touch()"></label>
   </div>
-  <button class="col-span-12 text-red-400 text-left" onclick="model.bars.splice(${idx},1); renumber(); renderAll()">✕ Remove</button>`); row.querySelector('select').value = b.matId; host.appendChild(row); }); }
-function renderSupports(){ const host=document.getElementById('supports'); host.innerHTML=''; model.supports.forEach((s,idx)=>{ if (!s.type) s.type = inferSupportType(s); const row = mkRow(`
-  <label class="col-span-2 text-xs">Node <input type="number" class="w-full" value="${s.node}" onchange="model.supports[${idx}].node=parseInt(this.value)||1; drawEverything()"/></label>
-  <label class="col-span-4 text-xs">Type <select class="w-full" onchange="applySupportType(model.supports[${idx}], this.value); renderSupports(); drawEverything();">
-    <option value="pin">Pin (ux,uz)</option><option value="rollerZ">Roller (uz)</option><option value="fixed">Fixed (ux,uz,rz)</option><option value="custom">Custom</option></select>
+  <button class="col-span-12 text-red-400 text-left" onclick="model.bars.splice(${idx},1); renumber(); renderAll(); touch()">✕ Remove</button>`); row.querySelector('select').value = b.matId; host.appendChild(row); }); }
+function renderSupports(){ const host=document.getElementById('supports'); host.innerHTML=''; model.supports.forEach((s,idx)=>{ if (!s.type) s.type = inferSupportType(s); const row = mkRow(`<label class="col-span-2 text-xs">Node
+  <input type="number" class="w-full" value="${s.node}" oninput="model.supports[${idx}].node=parseInt(this.value)||1; touch()"/></label>
+  <label class="col-span-4 text-xs">Type
+    <select class="w-full" onchange="applySupportType(model.supports[${idx}], this.value); renderSupports(); touch();">
+      <option value="pin">Pin (ux,uz)</option><option value="rollerZ">Roller (uz)</option>
+      <option value="fixed">Fixed (ux,uz,rz)</option><option value="custom">Custom</option>
+    </select>
   </label>
   <div class="col-span-6 grid grid-cols-3 gap-2 text-xs">
-    <label>ux <input type="checkbox" ${s.ux?'checked':''} onchange="model.supports[${idx}].ux=this.checked; model.supports[${idx}].type=inferSupportType(model.supports[${idx}]); drawEverything();"></label>
-    <label>uz <input type="checkbox" ${s.uz?'checked':''} onchange="model.supports[${idx}].uz=this.checked; model.supports[${idx}].type=inferSupportType(model.supports[${idx}]); drawEverything();"></label>
-    <label>rz <input type="checkbox" ${s.rz?'checked':''} onchange="model.supports[${idx}].rz=this.checked; model.supports[${idx}].type=inferSupportType(model.supports[${idx}]); drawEverything();"></label>
+    <label>ux <input type="checkbox" ${s.ux?'checked':''} onchange="model.supports[${idx}].ux=this.checked; model.supports[${idx}].type=inferSupportType(model.supports[${idx}]); touch();"></label>
+    <label>uz <input type="checkbox" ${s.uz?'checked':''} onchange="model.supports[${idx}].uz=this.checked; model.supports[${idx}].type=inferSupportType(model.supports[${idx}]); touch();"></label>
+    <label>rz <input type="checkbox" ${s.rz?'checked':''} onchange="model.supports[${idx}].rz=this.checked; model.supports[${idx}].type=inferSupportType(model.supports[${idx}]); touch();"></label>
   </div>
-  <button class="col-span-12 text-red-400 text-left" onclick="model.supports.splice(${idx},1); renderSupports(); drawEverything()">✕ Remove</button>`); row.querySelector('select').value = s.type; host.appendChild(row); }); }
-function renderNodeLoads(){ const host=document.getElementById('nodeloads'); host.innerHTML=''; model.nodeloads.forEach((l,idx)=>{ const row = mkRow(`
-  <label class="col-span-3 text-xs">Node<input type="number" class="w-full" value="${l.node}" onchange="model.nodeloads[${idx}].node=parseInt(this.value)||1"></label>
-  <label class="col-span-3 text-xs">Fx kN<input type="number" step="0.01" class="w-full" value="${l.Fx}" onchange="model.nodeloads[${idx}].Fx=num(this.value)"></label>
-  <label class="col-span-3 text-xs">Fz kN<input type="number" step="0.01" class="w-full" value="${l.Fz}" onchange="model.nodeloads[${idx}].Fz=num(this.value)"></label>
-  <label class="col-span-3 text-xs">M kNm<input type="number" step="0.01" class="w-full" value="${l.M}" onchange="model.nodeloads[${idx}].M=num(this.value)"></label>
-  <button class="col-span-12 text-red-400 text-left" onclick="model.nodeloads.splice(${idx},1); renderNodeLoads()">✕ Remove</button>`); host.appendChild(row); }); }
-function renderUdlLoads(){ const host=document.getElementById('udlloads'); host.innerHTML=''; model.udls.forEach((l,idx)=>{ const row = mkRow(`
-  <label class="col-span-4 text-xs">Bar<input type="number" class="w-full" value="${l.bar}" onchange="model.udls[${idx}].bar=parseInt(this.value)||1"></label>
-  <label class="col-span-6 text-xs">w kN/m (down)<input type="number" step="0.01" class="w-full" value="${l.w}" onchange="model.udls[${idx}].w=num(this.value)"></label>
-  <button class="col-span-2 text-red-400" onclick="model.udls.splice(${idx},1); renderUdlLoads()">✕</button>`); host.appendChild(row); }); }
-function renderAll(){ renderMaterials(); renderNodes(); renderBars(); renderSupports(); renderNodeLoads(); renderUdlLoads(); drawEverything(); }
+  <button class="col-span-12 text-red-400 text-left" onclick="model.supports.splice(${idx},1); renderSupports(); touch()">✕ Remove</button>`); row.querySelector('select').value = s.type; host.appendChild(row); }); }
+function renderNodeLoads(){ const host=document.getElementById('nodeloads'); host.innerHTML=''; model.nodeloads.forEach((l,idx)=>{ const row = mkRow(`<label class="col-span-3 text-xs">Node<input type="number" class="w-full" value="${l.node}" oninput="model.nodeloads[${idx}].node=parseInt(this.value)||1; touch()"></label>
+  <label class="col-span-3 text-xs">Fx kN<input type="number" step="0.01" class="w-full" value="${l.Fx}" oninput="model.nodeloads[${idx}].Fx=num(this.value); touch()"></label>
+  <label class="col-span-3 text-xs">Fz kN<input type="number" step="0.01" class="w-full" value="${l.Fz}" oninput="model.nodeloads[${idx}].Fz=num(this.value); touch()"></label>
+  <label class="col-span-3 text-xs">M kNm<input type="number" step="0.01" class="w-full" value="${l.M}" oninput="model.nodeloads[${idx}].M=num(this.value); touch()"></label>
+  <button class="col-span-12 text-red-400 text-left" onclick="model.nodeloads.splice(${idx},1); renderNodeLoads(); touch()">✕ Remove</button>`); host.appendChild(row); }); }
+function renderUdlLoads(){ const host=document.getElementById('udlloads'); host.innerHTML=''; model.udls.forEach((l,idx)=>{ const row = mkRow(`<label class="col-span-4 text-xs">Bar<input type="number" class="w-full" value="${l.bar}" oninput="model.udls[${idx}].bar=parseInt(this.value)||1; touch()"></label>
+  <label class="col-span-6 text-xs">w kN/m (down)<input type="number" step="0.01" class="w-full" value="${l.w}" oninput="model.udls[${idx}].w=num(this.value); touch()"></label>
+  <button class="col-span-2 text-red-400" onclick="model.udls.splice(${idx},1); renderUdlLoads(); touch()">✕</button>`); host.appendChild(row); }); }
+function renderAll(){ renderMaterials(); renderNodes(); renderBars(); renderSupports(); renderNodeLoads(); renderUdlLoads(); touch(false); }
 function renumber(){ model.nodes.forEach((n,i)=>n.id=i+1); model.bars.forEach((b,i)=>b.id=i+1); }
-function addMaterial(){ const id=model.materials.length+1; model.materials.push({id,name:`Steel S${id}`,E:210,rho:78.5}); renderMaterials(); }
-function addNode(){ const id=model.nodes.length+1; model.nodes.push({id,x:(id-1)*2, z:0}); renderNodes(); drawEverything(); }
-function addBar(){ const id=model.bars.length+1; const mat=model.materials[0]?.id||1; model.bars.push({id,i:id,j:id+1,matId:mat,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}}); renderBars(); drawEverything(); }
-function addSupport(){ model.supports.push({node:1,ux:true,uz:true,rz:false,type:'pin'}); renderSupports(); drawEverything(); }
-function addNodeLoad(){ model.nodeloads.push({node:1,Fx:0,Fz:-10,M:0}); renderNodeLoads(); }
-function addUdlLoad(){ model.udls.push({bar:1,w:-5}); renderUdlLoads(); }
-
-/* Numbers */
-function readNumInput(el){ if(!el) return NaN; const raw=(el.value??'').toString().trim().replace(',', '.'); const v=Number(raw); return Number.isFinite(v)? v : NaN; }
-function syncBarsFromInputs(){ model.bars.forEach((b,idx)=>{ const Ael=document.getElementById(`bar-${idx}-A`); const Iel=document.getElementById(`bar-${idx}-I`); const Aval=readNumInput(Ael); const Ival=readNumInput(Iel); if(Number.isFinite(Aval)) b.A=Aval; if(Number.isFinite(Ival)) b.I=Ival; }); }
+function addMaterial(){ const id=model.materials.length+1; model.materials.push({id,name:`Custom ${id}`,E:210,rho:78.5,fy:250}); renderMaterials(); touch(); }
+function addNode(){ const id=model.nodes.length+1; model.nodes.push({id,x:(id-1)*2, z:0}); renderNodes(); touch(); }
+function addBar(){ const id=model.bars.length+1; const mat=model.materials[0]?.id||1; model.bars.push({id,i:id,j:id+1,matId:mat,A:0.02,I:8e-5,sectionKey:'',releaseI:{rz:false},releaseJ:{rz:false}}); renderBars(); touch(); }
+function addSupport(){ model.supports.push({node:1,ux:true,uz:true,rz:false,type:'pin'}); renderSupports(); touch(); }
+function addNodeLoad(){ model.nodeloads.push({node:1,Fx:0,Fz:-10,M:0}); renderNodeLoads(); touch(); }
+function addUdlLoad(){ model.udls.push({bar:1,w:-5}); renderUdlLoads(); touch(); }
+function readNumInput(el){ if(!el) return NaN; const raw = (el.value ?? "").toString().trim().replace(',', '.'); const v = Number(raw); return Number.isFinite(v) ? v : NaN; }
+function syncBarsFromInputs(){ model.bars.forEach((b, idx) => { const Ael = document.getElementById(`bar-${idx}-A`); const Iel = document.getElementById(`bar-${idx}-I`); const Aval = readNumInput(Ael); const Ival = readNumInput(Iel); if (Number.isFinite(Aval)) b.A = Aval; if (Number.isFinite(Ival)) b.I = Ival; }); }
 
 /* ====================== Solver ====================== */
 let _lastResult=null;
 function assembleAndSolve(){
   syncBarsFromInputs();
-  const nn=model.nodes.length; if(nn===0) return null;
-  const dof=nn*3; let K=math.zeros(dof,dof), F=math.zeros(dof,1);
-  const nodeIndex=(nid)=> (nid-1)*3, getNode=(id)=> model.nodes.find(n=>n.id===id), getMat=(id)=> model.materials.find(m=>m.id===id);
-  const elemForcesLocal=[], elemGeometry=[];
+  const nn = model.nodes.length; if(nn===0) return null;
+  const dof = nn*3;
+  let K = math.zeros(dof,dof);
+  let F = math.zeros(dof,1);
+
+  const nodeIndex = (nid)=> (nid-1)*3;
+  const getNode = (id)=> model.nodes.find(n=>n.id===id);
+  const getMat  = (id)=> model.materials.find(m=>m.id===id);
+
+  const elemForcesLocal = [];
+  const elemGeometry = [];
 
   for(const b of model.bars){
-    const ni=getNode(b.i), nj=getNode(b.j); if(!ni||!nj) continue;
-    const dx=nj.x-ni.x, dz=nj.z-ni.z, L=Math.hypot(dx,dz); if(L<1e-9) continue; const c=dx/L, s=dz/L;
-    const R=math.matrix([[ c,  s, 0,   0,  0, 0],[-s,  c, 0,   0,  0, 0],[ 0,  0, 1,   0,  0, 0],[ 0,  0, 0,   c,  s, 0],[ 0,  0, 0,  -s,  c, 0],[ 0,  0, 0,   0,  0, 1]]);
-    const E=(getMat(b.matId)?.E??210)*1e9, A=b.A, I=b.I;
-    const EA_L=E*A/L, EI=E*I;
-    let kLoc=math.matrix([
-      [ EA_L,        0,           0, -EA_L,        0,           0],
-      [    0, 12*EI/L**3,  6*EI/L**2,     0, -12*EI/L**3,  6*EI/L**2],
-      [    0,  6*EI/L**2,     4*EI/L,     0,  -6*EI/L**2,     2*EI/L],
-      [-EA_L,        0,           0,  EA_L,        0,           0],
-      [    0, -12*EI/L**3, -6*EI/L**2,     0,  12*EI/L**3, -6*EI/L**2],
-      [    0,  6*EI/L**2,     2*EI/L,     0,  -6*EI/L**2,     4*EI/L],
-    ]);
-    const eps=1e-9;
-    if(b.releaseI?.rz){ for(let j=0;j<6;j++){ kLoc.subset(math.index(2,j),0); kLoc.subset(math.index(j,2),0);} kLoc.subset(math.index(2,2),eps); }
-    if(b.releaseJ?.rz){ for(let j=0;j<6;j++){ kLoc.subset(math.index(5,j),0); kLoc.subset(math.index(j,5),0);} kLoc.subset(math.index(5,5),eps); }
-    const kGlobal=math.multiply(math.transpose(R), kLoc, R);
-    const map=[nodeIndex(b.i)+0,nodeIndex(b.i)+1,nodeIndex(b.i)+2,nodeIndex(b.j)+0,nodeIndex(b.j)+1,nodeIndex(b.j)+2];
+    const ni = getNode(b.i), nj = getNode(b.j); if(!ni||!nj) continue;
+    const dx = nj.x - ni.x; const dz = nj.z - ni.z; const L = Math.hypot(dx,dz); if(L<1e-9) continue;
+    const c = dx/L, s = dz/L;
+    const R = math.matrix([ [ c,  s, 0,   0,  0, 0],[ -s,  c, 0,   0,  0, 0],[ 0,  0, 1,   0,  0, 0],[ 0,  0, 0,   c,  s, 0],[ 0,  0, 0,  -s,  c, 0],[ 0,  0, 0,   0,  0, 1] ]);
+    const E = (getMat(b.matId)?.E ?? 210) * 1e9;
+    const A = b.A; const I = b.I;
+    const EA_L = E*A/L; const EI = E*I;
+    let kLoc = math.matrix([ [ EA_L, 0, 0, -EA_L, 0, 0],[0, 12*EI/L**3, 6*EI/L**2, 0, -12*EI/L**3, 6*EI/L**2],[0, 6*EI/L**2, 4*EI/L, 0, -6*EI/L**2, 2*EI/L],[-EA_L,0,0,EA_L,0,0],[0,-12*EI/L**3,-6*EI/L**2,0,12*EI/L**3,-6*EI/L**2],[0,6*EI/L**2,2*EI/L,0,-6*EI/L**2,4*EI/L] ]);
+    const eps=1e-9; if(b.releaseI?.rz){ for(let j=0;j<6;j++){ kLoc.subset(math.index(2,j),0); kLoc.subset(math.index(j,2),0); } kLoc.subset(math.index(2,2),eps); } if(b.releaseJ?.rz){ for(let j=0;j<6;j++){ kLoc.subset(math.index(5,j),0); kLoc.subset(math.index(j,5),0); } kLoc.subset(math.index(5,5),eps); }
+    const kGlobal = math.multiply(math.transpose(R), kLoc, R);
+    const map = [nodeIndex(b.i)+0, nodeIndex(b.i)+1, nodeIndex(b.i)+2, nodeIndex(b.j)+0, nodeIndex(b.j)+1, nodeIndex(b.j)+2];
     for(let a=0;a<6;a++){ for(let b2=0;b2<6;b2++){ K.subset(math.index(map[a],map[b2]), K.get([map[a],map[b2]]) + kGlobal.get([a,b2])); } }
 
-    const udl=model.udls.find(u=>u.bar===b.id);
-    let fLocal=math.zeros(6,1), wLocal_kNm=0;
+    const udl = model.udls.find(u=>u.bar===b.id);
+    let fLocal = math.zeros(6,1);
+    let wLocal_kNm = 0;
     if(udl && Math.abs(udl.w)>0){
-      const w=udl.w * c; // kN/m projected
-      wLocal_kNm=w;
-      const wL=w*L;
-      fLocal = math.matrix([[0],[ wL/2],[ w*L*L/12],[0],[ wL/2],[ -w*L*L/12]]); // kN/kNm
+      const w = udl.w * c; // kN/m
+      wLocal_kNm = w;
+      const wL = w*L;
+      fLocal = math.matrix([[0],[ wL/2],[ w*L*L/12],[0],[ wL/2],[ -w*L*L/12]]);
     }
-    elemGeometry.push({id:b.id,i:b.i,j:b.j,L,c,s,R,kLoc,wLocal_kNm});
+    elemGeometry.push({id:b.id, i:b.i, j:b.j, L, c, s, R, kLoc, wLocal_kNm});
     elemForcesLocal.push({id:b.id, fLocal});
   }
 
-  // node loads (kN->N, kNm->Nm)
   for(const l of model.nodeloads){
-    const base=(l.node-1)*3; if(base<0) continue;
-    F.subset(math.index(base+0,0), F.get([base+0,0]) + l.Fx*1e3);
-    F.subset(math.index(base+1,0), F.get([base+1,0]) + l.Fz*1e3);
-    F.subset(math.index(base+2,0), F.get([base+2,0]) + l.M*1e3);
+    const base = (l.node-1)*3;
+    if(base>=0){
+      F.subset(math.index(base+0,0), F.get([base+0,0]) + l.Fx*1e3);
+      F.subset(math.index(base+1,0), F.get([base+1,0]) + l.Fz*1e3);
+      F.subset(math.index(base+2,0), F.get([base+2,0]) + l.M*1e3);
+    }
   }
-  // UDL equivalent nodal (kN->N)
   for(const e of elemGeometry){
     const fel_kN = elemForcesLocal.find(x=>x.id===e.id).fLocal;
     const feg_kN = math.multiply(math.transpose(e.R), fel_kN);
     const map = [ (e.i-1)*3+0, (e.i-1)*3+1, (e.i-1)*3+2, (e.j-1)*3+0, (e.j-1)*3+1, (e.j-1)*3+2 ];
-    for(let a=0;a<6;a++){ F.subset(math.index(map[a],0), F.get([map[a],0]) + feg_kN.get([a,0])*1e3); }
+    for(let a=0;a<6;a++){
+      F.subset(math.index(map[a],0), F.get([map[a],0]) + feg_kN.get([a,0])*1e3);
+    }
   }
 
-  // supports penalty
-  const fixed=new Set(); for(const s of model.supports){ const base=(s.node-1)*3; if(s.ux) fixed.add(base+0); if(s.uz) fixed.add(base+1); if(s.rz) fixed.add(base+2); }
-  const bigK=1e18; fixed.forEach(d=>{ K.subset(math.index(d,d), K.get([d,d]) + bigK); });
+  const fixed = new Set();
+  for(const s of model.supports){
+    const base=(s.node-1)*3;
+    if(s.ux) fixed.add(base+0);
+    if(s.uz) fixed.add(base+1);
+    if(s.rz) fixed.add(base+2);
+  }
+  const bigK=1e18;
+  fixed.forEach(d=>{ K.subset(math.index(d,d), K.get([d,d]) + bigK); });
 
-  let U; try{ U=math.lusolve(K,F); }catch(err){ console.error(err); alert('Solver failed – model may be unstable.'); return null; }
+  let U;
+  try{ U = math.lusolve(K,F); }
+  catch(err){ console.error(err); alert('Solver failed – model may be unstable.'); return null; }
 
   const barEndForces=[];
   for(const e of elemGeometry){
@@ -280,85 +446,153 @@ function assembleAndSolve(){
     const Ug = math.matrix([[U.get([map[0],0])],[U.get([map[1],0])],[U.get([map[2],0])],[U.get([map[3],0])],[U.get([map[4],0])],[U.get([map[5],0])]]);
     const Ul = math.multiply(e.R, Ug);
     const fel_kN = elemForcesLocal.find(x=>x.id===e.id).fLocal;
-    const fel = math.multiply(1e3, fel_kN); // -> N/Nm
-    const ql = math.add(math.multiply(e.kLoc, Ul), math.multiply(-1, fel)); // N/Nm
+    const fel = math.multiply(1e3, fel_kN);
+    const ql = math.add(math.multiply(e.kLoc, Ul), math.multiply(-1, fel));
     barEndForces.push({id:e.id, ql, Ul});
   }
+
   return {U, barEndForces, geom: elemGeometry};
 }
 
-/* ======= Summary + reactions ======= */
+/* ====================== Results & plots ====================== */
 const fmt = { mm: v => (v*1000).toFixed(3), mrad: v => (v*1000).toFixed(3), kN: v => (v/1e3).toFixed(2), kNm: v => (v/1e3).toFixed(2) };
-function toCSV(rows){ return rows.map(r=>r.map(x=>String(x)).join(',')).join('\\n'); }
-function analyticSSUDL(){ if(model.nodes.length!==2 || model.bars.length!==1 || model.udls.length!==1) return null; const b=model.bars[0]; const n1=model.nodes.find(n=>n.id===b.i), n2=model.nodes.find(n=>n.id===b.j); if(!n1||!n2) return null; const L=Math.hypot(n2.x-n1.x, n2.z-n1.z); if(model.supports.length!==2) return null; const ok=model.supports.every(s=>s.uz && !s.rz); if(!ok) return null; const mat=model.materials.find(m=>m.id===b.matId); if(!mat) return null; const E=mat.E*1e9, I=b.I; const w=Math.abs(model.udls[0].w)*1000; const v=5*w*Math.pow(L,4)/(384*E*I); return {v_mm:v*1000, x:L/2, bar:b.id}; }
-function computeReactions(result){
-  const {geom, barEndForces}=result; const nn=model.nodes.length; const Rnode=Array.from({length:nn},()=>({Fx:0,Fz:0,M:0}));
-  for(const e of geom){ const ql=barEndForces.find(q=>q.id===e.id).ql; const qg=math.multiply(math.transpose(e.R), ql); const map=[e.i-1,e.i-1,e.i-1,e.j-1,e.j-1,e.j-1]; const comp=['Fx','Fz','M','Fx','Fz','M']; for(let k=0;k<6;k++){ const idx=map[k]; Rnode[idx][comp[k]] += qg.get([k,0]); } }
-  for(const l of model.nodeloads){ const i=l.node-1; if(i<0) continue; Rnode[i].Fx -= l.Fx*1e3; Rnode[i].Fz -= l.Fz*1e3; Rnode[i].M -= l.M*1e3; }
-  const supportsAt=new Set(model.supports.map(s=>s.node)); return Rnode.map((r,idx)=>supportsAt.has(idx+1)?({node:idx+1,Fx:r.Fx/1e3,Fz:r.Fz/1e3,M:r.M/1e3}):null).filter(Boolean);
-}
+function toCSV(rows){ return rows.map(r=>r.map(x=>String(x)).join(',')).join('\n'); }
+let _touchTimer=null;
+function analyticSSUDL(){ if (model.nodes.length!==2 || model.bars.length!==1 || model.udls.length!==1) return null; const b = model.bars[0]; const n1 = model.nodes.find(n=>n.id===b.i), n2 = model.nodes.find(n=>n.id===b.j); if(!n1 || !n2) return null; const L = Math.hypot(n2.x-n1.x, n2.z-n1.z); if (model.supports.length!==2) return null; const ok = model.supports.every(s=>s.uz && !s.rz); if (!ok) return null; const mat = model.materials.find(m=>m.id===b.matId); if(!mat) return null; const E = mat.E*1e9, I = b.I; const w  = Math.abs(model.udls[0].w)*1000; const v  = 5*w*Math.pow(L,4)/(384*E*I); return {v_mm: v*1000, x: L/2, bar: b.id}; }
+function computeReactions(result){ const {geom, barEndForces} = result; const nn = model.nodes.length; const Rnode = Array.from({length: nn}, ()=>({Fx:0, Fz:0, M:0})); for(const e of geom){ const ql = barEndForces.find(q=>q.id===e.id).ql; const qg = math.multiply(math.transpose(e.R), ql); const map = [e.i-1,e.i-1,e.i-1,e.j-1,e.j-1,e.j-1]; const comp=['Fx','Fz','M','Fx','Fz','M']; for(let k=0;k<6;k++){ const idx = map[k]; Rnode[idx][comp[k]] += qg.get([k,0]); } } for(const l of model.nodeloads){ const i=l.node-1; if(i<0) continue; Rnode[i].Fx -= l.Fx*1e3; Rnode[i].Fz -= l.Fz*1e3; Rnode[i].M  -= l.M*1e3; } const supportsAt = new Set(model.supports.map(s=>s.node)); return Rnode.map((r,idx)=>supportsAt.has(idx+1)?({node:idx+1, Fx:r.Fx/1e3, Fz:r.Fz/1e3, M:r.M/1e3}):null).filter(Boolean); }
 function maximaGlobal(res){
-  const out={M:{val:0,bar:null,x:0},V:{val:0,bar:null,where:'i',x:0},defl:{val:0,bar:null,x:0}};
-  for(const e of res.geom){
-    const L=e.L, be=res.barEndForces.find(q=>q.id===e.id); const ql=be.ql, Ul=be.Ul;
-    const Vi=ql.get([1,0]), Mi=ql.get([2,0]), Vj_local=-ql.get([4,0]); const wNpm=e.wLocal_kNm*1000;
-    let bestM={x:0,M:Mi}; const samples=120; for(let k=0;k<=samples;k++){ const x=L*k/samples; const Mx=Mi - Vi*x - 0.5*wNpm*x*x; if(Math.abs(Mx)>Math.abs(bestM.M)) bestM={x,M:Mx}; }
-    const M_kNm=bestM.M/1000; if(Math.abs(M_kNm)>Math.abs(out.M.val)) out.M={val:M_kNm,bar:e.id,x:bestM.x};
-    const Vi_kN=Vi/1000, Vj_kN=Vj_local/1000; const ends=[{v:Vi_kN,where:'i',x:0},{v:Vj_kN,where:'j',x:L}]; for(const s of ends){ if(Math.abs(s.v)>Math.abs(out.V.val)) out.V={val:s.v,bar:e.id,where:s.where,x:s.x}; }
-    const vi=Ul.get([1,0]),thi=Ul.get([2,0]),vj=Ul.get([4,0]),thj=Ul.get([5,0]); const ns=50; for(let k=0;k<ns;k++){ const x=L*(k/(ns-1)); const xi=x/L; const N1=1-3*xi*xi+2*xi*xi*xi, N2=L*(xi-2*xi*xi+xi*xi*xi), N3=3*xi*xi-2*xi*xi*xi, N4=L*(-xi*xi+xi*xi*xi); const v=N1*vi+N2*thi+N3*vj+N4*thj; const mm=v*1000; if(Math.abs(mm)>Math.abs(out.defl.val)) out.defl={val:mm,bar:e.id,x}; }
+  const out = { M:{val:0, bar:null, x:0}, V:{val:0, bar:null, where:'i', x:0}, defl:{val:0, bar:null, x:0} };
+  for (const e of res.geom){
+    const L = e.L;
+    const be = res.barEndForces.find(q => q.id === e.id);
+    const ql = be.ql, Ul = be.Ul;
+    const Vi = ql.get([1,0]); const Mi = ql.get([2,0]); const Vj_local = -ql.get([4,0]); const wNpm = e.wLocal_kNm * 1000;
+    let bestM = {x:0, M:Mi}; const samples = 120;
+    for (let k = 0; k <= samples; k++){ const x = (L * k) / samples; const Mx = Mi - Vi*x - 0.5*wNpm*x*x; if (Math.abs(Mx) > Math.abs(bestM.M)) bestM = {x, M: Mx}; }
+    const M_kNm = bestM.M / 1000;
+    if (Math.abs(M_kNm) > Math.abs(out.M.val)){ out.M = { val: M_kNm, bar: e.id, x: bestM.x }; }
+    const Vi_kN = Vi/1000, Vj_kN = Vj_local/1000; const ends=[{v: Vi_kN, where: 'i', x: 0},{v: Vj_kN, where: 'j', x: L}];
+    for (const s of ends){ if (Math.abs(s.v) > Math.abs(out.V.val)){ out.V = { val: s.v, bar: e.id, where: s.where, x: s.x }; } }
+    const vi  = Ul.get([1,0]),  thi = Ul.get([2,0]); const vj  = Ul.get([4,0]),  thj = Ul.get([5,0]); const ns = 50;
+    for (let k = 0; k < ns; k++){ const x = L * (k/(ns-1)); const ξ = x/L; const N1 = 1 - 3*ξ*ξ + 2*ξ*ξ*ξ; const N2 = L*(ξ - 2*ξ*ξ + ξ*ξ*ξ); const N3 = 3*ξ*ξ - 2*ξ*ξ*ξ; const N4 = L*(-ξ*ξ + ξ*ξ*ξ); const v = N1*vi + N2*thi + N3*vj + N4*thj; const mm = v*1000; if (Math.abs(mm) > Math.abs(out.defl.val)){ out.defl = { val: mm, bar: e.id, x }; } }
   }
-  const ana=analyticSSUDL(); if(ana){ out.defl={val:ana.v_mm,bar:ana.bar,x:ana.x}; }
+  const ana = analyticSSUDL(); if (ana){ out.defl = { val: ana.v_mm, bar: ana.bar, x: ana.x }; }
   return out;
 }
 
-/* ---- Tabs ---- */
+/* ------------- Buckling utilities (EC3-style) ------------- */
+function endRestraintForBar(b, end){ const nodeId = (end==='i') ? b.i : b.j; const nodeSupport = model.supports.find(s=>s.node===nodeId); const releaseRz = (end==='i') ? (b.releaseI?.rz) : (b.releaseJ?.rz); const deg = model.bars.reduce((acc,bb)=> acc + ((bb.i===nodeId || bb.j===nodeId)?1:0), 0); if (nodeSupport?.rz) return 'fixed'; if (deg===1 && !nodeSupport) return 'free'; if (releaseRz) return 'hinge'; if (nodeSupport && !nodeSupport.rz) return 'hinge'; return 'hinge'; }
+function kFactor(b){ const ri = endRestraintForBar(b,'i'); const rj = endRestraintForBar(b,'j'); if ((ri==='fixed' && rj==='fixed')) return 0.5; if ((ri==='fixed' && rj==='hinge') || (ri==='hinge' && rj==='fixed')) return 0.7; if ((ri==='fixed' && rj==='free') || (ri==='free' && rj==='fixed') || (ri==='hinge' && rj==='free') || (ri==='free' && rj==='hinge')) return 2.0; return 1.0; }
+function curveAlphaForSection(sectionKey){ if (!sectionKey) return {curve:'b', alpha:0.34}; if (sectionKey.startsWith('SHS') || sectionKey.startsWith('RHS') || sectionKey.startsWith('CHS') || sectionKey.startsWith('Ø')) return {curve:'a', alpha:0.21}; if (sectionKey.startsWith('I ')) return {curve:'b', alpha:0.34}; if (sectionKey.startsWith('Plate') || sectionKey.startsWith('Rect')) return {curve:'c', alpha:0.49}; return {curve:'b', alpha:0.34}; }
+function bucklingForBar(res, b){
+  const g = res.geom.find(ee=>ee.id===b.id);
+  const be = res.barEndForces.find(q=>q.id===b.id);
+  if(!g || !be) return null;
+  const mat = model.materials.find(m=>m.id===b.matId) || {E:210, fy:250};
+  const E = mat.E*1e9;
+  const fy = (mat.fy||250)*1e6;
+
+  const Ni = -be.ql.get([0,0]); // N
+  const Nj =  be.ql.get([3,0]); // N
+  const NEd = Math.max(0, Ni, Nj);
+
+  const L = g.L;
+  const k = kFactor(b);
+  const Le = k*L;
+  const A = b.A;
+  const I = b.I;
+  const r = Math.sqrt(I/A);
+
+  const Ncr = Math.PI*Math.PI*E*I/(Le*Le);
+  const lam_bar = Math.sqrt((A*fy)/Ncr);
+  const {curve, alpha} = curveAlphaForSection(b.sectionKey||'');
+  const phi = 0.5*(1 + alpha*(lam_bar-0.2) + lam_bar*lam_bar);
+  const underroot = Math.max(0, phi*phi - lam_bar*lam_bar);
+  let chi = 1/(phi + Math.sqrt(underroot));
+  chi = Math.min(1, Math.max(0, chi));
+  const gammaM1 = 1.0;
+  const NbRd = chi*A*fy/gammaM1;
+  const util = (NEd<=0) ? 0 : NEd/NbRd;
+
+  return {L, k, KLr: (Le/r), NEd, Ncr, lam_bar, chi, NbRd, util, curve, s:g.s};
+}
+
+/* Tabs (unchanged except for Buckling table) */
 function tableHTML(rows){ let h='<table class="tbl"><tr>'; for(const th of rows[0]) h+=`<th>${th}</th>`; h+='</tr>'; for(let i=1;i<rows.length;i++){ h+='<tr>'+rows[i].map(td=>`<td>${td}</td>`).join('')+'</tr>'; } h+='</table>'; return h; }
 function showTab(which){
   const host=document.getElementById('tabContainer');
-  if(!_lastResult){ host.innerHTML='<div class="text-[var(--muted)]">Run the solver.</div>'; return; }
+  if(!_lastResult){ host.innerHTML='<div class="text-[var(--muted)]">Edit inputs to run.</div>'; return; }
   const {U, barEndForces}=_lastResult;
   if(which==='nodes'){
     const rows=[['Node','Ux [mm]','Uz [mm]','Rz [mrad]']];
-    for(const n of model.nodes){ const ux=U.get([(n.id-1)*3+0,0]), uz=U.get([(n.id-1)*3+1,0]), rz=U.get([(n.id-1)*3+2,0]); rows.push([`N${n.id}`, fmt.mm(ux), fmt.mm(uz), fmt.mrad(rz)]); }
+    for(const n of model.nodes){
+      const ux=U.get([(n.id-1)*3+0,0]), uz=U.get([(n.id-1)*3+1,0]), rz=U.get([(n.id-1)*3+2,0]);
+      rows.push([`N${n.id}`, (ux*1000).toFixed(3), (uz*1000).toFixed(3), (rz*1000).toFixed(3)]);
+    }
     host.dataset.csv=toCSV(rows); host.innerHTML=tableHTML(rows);
-  } else if(which==='bars'){
-    const rows=[['Bar','Fx_i [kN]','Fz_i [kN]','Mi [kNm]','Fx_j [kN]','Fz_j [kN]','Mj [kNm]']];
-    for(const be of barEndForces){ const q=be.ql; rows.push([`B${be.id}`,(q.get([0,0])/1e3).toFixed(2),(q.get([1,0])/1e3).toFixed(2),(q.get([2,0])/1e3).toFixed(2),(q.get([3,0])/1e3).toFixed(2),(q.get([4,0])/1e3).toFixed(2),(q.get([5,0])/1e3).toFixed(2)]); }
+  }else if(which==='bars'){
+    const rows=[['Bar','Mat','Section','A [m²]','I [m⁴]','Fx_i [kN]','Fz_i [kN]','Mi [kNm]','Fx_j [kN]','Fz_j [kN]','Mj [kNm]']];
+    for(const be of barEndForces){
+      const q=be.ql; const b=model.bars.find(bb=>bb.id===be.id); const mat=model.materials.find(m=>m.id===b.matId);
+      rows.push([`B${be.id}`, mat?.name||'—', b.sectionKey||'Custom', b.A.toExponential(3), b.I.toExponential(3),
+        (q.get([0,0])/1e3).toFixed(2),(q.get([1,0])/1e3).toFixed(2),(q.get([2,0])/1e3).toFixed(2),
+        (q.get([3,0])/1e3).toFixed(2),(q.get([4,0])/1e3).toFixed(2),(q.get([5,0])/1e3).toFixed(2)]);
+    }
     host.dataset.csv=toCSV(rows); host.innerHTML=tableHTML(rows);
-  } else if(which==='reactions'){
-    const R=computeReactions(_lastResult); const rows=[['Node','Rx [kN]','Rz [kN]','M [kNm]']]; for(const r of R){ rows.push([`N${r.node}`, r.Fx.toFixed(2), r.Fz.toFixed(2), r.M.toFixed(2)]); } host.dataset.csv=toCSV(rows); host.innerHTML=tableHTML(rows);
-  } else {
-    const max=maximaGlobal(_lastResult);
+  }else if(which==='reactions'){
+    const R=computeReactions(_lastResult);
+    const rows=[['Node','Rx [kN]','Rz [kN]','M [kNm]']];
+    for(const r of R){ rows.push([`N${r.node}`, r.Fx.toFixed(2), r.Fz.toFixed(2), r.M.toFixed(2)]); }
+    host.dataset.csv=toCSV(rows); host.innerHTML=tableHTML(rows);
+  }else if(which==='buckling'){
+    const rows=[['Bar','k','L [m]','KL/r','N_Ed [kN]','N_cr [kN]','λ̄','χ','N_b,Rd [kN]','Util [%]','Curve']];
+    for(const b of model.bars){
+      const bk = bucklingForBar(_lastResult, b);
+      if(!bk){ rows.push([`B${b.id}`,'–','–','–','–','–','–','–','–','–','–']); continue; }
+      const utilPct = 100*bk.util;
+      const utilCell = utilPct>=100 ? `<span class="u-bad">${utilPct.toFixed(1)}</span>` :
+                         utilPct>=80  ? `<span class="u-warn">${utilPct.toFixed(1)}</span>` :
+                                        `<span class="u-good">${utilPct.toFixed(1)}</span>`;
+      rows.push([`B${b.id}`, bk.k.toFixed(2), bk.L.toFixed(3), bk.KLr.toFixed(1),
+                 (bk.NEd/1e3).toFixed(1), (bk.Ncr/1e3).toFixed(1),
+                 bk.lam_bar.toFixed(3), bk.chi.toFixed(3), (bk.NbRd/1e3).toFixed(1),
+                 utilCell, bk.curve]);
+    }
+    host.dataset.csv = toCSV([['Bar','k','L [m]','KL/r','N_Ed [kN]','N_cr [kN]','lambda','chi','N_b,Rd [kN]','Util [%]','Curve']].concat(
+      model.bars.map(b=>{ const bk=bucklingForBar(_lastResult,b);
+        if(!bk) return [`B${b.id}`,'-','-','-','-','-','-','-','-','-','-'];
+        return [`B${b.id}`, bk.k.toFixed(2), bk.L.toFixed(3), bk.KLr.toFixed(1),
+                (bk.NEd/1e3).toFixed(1), (bk.Ncr/1e3).toFixed(1),
+                bk.lam_bar.toFixed(3), bk.chi.toFixed(3), (bk.NbRd/1e3).toFixed(1), (100*bk.util).toFixed(1), bk.curve];
+      })
+    ));
+    host.innerHTML=tableHTML(rows);
+  }else{
+    const max = maximaGlobal(_lastResult);
     host.dataset.csv='';
-    host.innerHTML=`
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-        <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
-          <div class="text-[var(--muted)] mb-1">Max bending moment</div>
-          <div class="text-lg font-semibold">${Math.abs(max.M.val).toFixed(2)} kNm</div>
-          <div class="text-[var(--muted)]">at B${max.M.bar}, x=${max.M.x.toFixed(3)} m</div>
-        </div>
-        <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
-          <div class="text-[var(--muted)] mb-1">Max shear force</div>
-          <div class="text-lg font-semibold">${Math.abs(max.V.val).toFixed(2)} kN</div>
-          <div class="text-[var(--muted)]">at B${max.V.bar} end ${max.V.where.toUpperCase()}</div>
-        </div>
-        <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
-          <div class="text-[var(--muted)] mb-1">Max deflection (local v)</div>
-          <div class="text-lg font-semibold">${Math.abs(max.defl.val).toFixed(3)} mm</div>
-          <div class="text-[var(--muted)]">at B${max.defl.bar}, x=${max.defl.x.toFixed(3)} m</div>
-        </div>
-        <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
-          <div class="text-[var(--muted)] mb-1">Elements</div>
-          <div class="text-lg font-semibold">${model.bars.length}</div>
-        </div>
-      </div>`;
+    host.innerHTML=`<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
+        <div class="text-[var(--muted)] mb-1">Max bending moment</div>
+        <div class="text-lg font-semibold">${Math.abs(max.M.val).toFixed(2)} kNm</div>
+        <div class="text-[var(--muted)]">at B${max.M.bar}, x=${max.M.x.toFixed(3)} m</div>
+      </div>
+      <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
+        <div class="text-[var(--muted)] mb-1">Max shear force</div>
+        <div class="text-lg font-semibold">${Math.abs(max.V.val).toFixed(2)} kN</div>
+        <div class="text-[var(--muted)]">at B${max.V.bar} end ${max.V.where.toUpperCase()}</div>
+      </div>
+      <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
+        <div class="text-[var(--muted)] mb-1">Max deflection (local v)</div>
+        <div class="text-lg font-semibold">${Math.abs(max.defl.val).toFixed(3)} mm</div>
+        <div class="text-[var(--muted)]">at B${max.defl.bar}, x=${max.defl.x.toFixed(3)} m</div>
+      </div>
+      <div class="p-3 rounded bg-[#142036] border border-[var(--line)]">
+        <div class="text-[var(--muted)] mb-1">Elements</div>
+        <div class="text-lg font-semibold">${model.bars.length}</div>
+      </div></div>`;
   }
 }
-function bindTabs(){
-  document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click', ()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); b.classList.add('active'); showTab(b.dataset.tab); }));
-  document.getElementById('btnCopy').onclick=()=>{ const ta=document.createElement('textarea'); ta.value=document.getElementById('tabContainer').innerText; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); };
-  document.getElementById('btnCSV').onclick=()=>{ const csv=document.getElementById('tabContainer').dataset.csv||''; const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='backbone_results.csv'; a.click(); };
-}
+function bindTabs(){ const tabs=document.querySelectorAll('.tab'); tabs.forEach(b=>b.addEventListener('click', ()=>{ tabs.forEach(x=>x.classList.remove('active')); b.classList.add('active'); showTab(b.dataset.tab); })); document.getElementById('btnCopy').onclick=()=>{ const ta=document.createElement('textarea'); ta.value=document.getElementById('tabContainer').innerText; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }; document.getElementById('btnCSV').onclick=()=>{ const csv=document.getElementById('tabContainer').dataset.csv||''; const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='backbone_results.csv'; a.click(); }; }
 
 /* =================== Axes + drawing =================== */
 function fmtTick(v){ const abs=Math.abs(v); const dp = abs>=1000 ? 0 : abs>=100 ? 1 : 2; return v.toLocaleString(undefined,{minimumFractionDigits:dp, maximumFractionDigits:dp}); }
@@ -368,30 +602,24 @@ function extents(){ if(model.nodes.length===0) return {minx:0,maxx:1,minz:0,maxz
 function worldToScreenInline(W,H){ const ext=extents(); const pad=0.15*Math.max(1, ext.maxx-ext.minx); const s=(W-60)/(ext.maxx-ext.minx+2*pad); const ox=40 - (ext.minx - pad)*s; return {X:x=>ox+x*s, invS:1/s, ext}; }
 function drawAxisInline(ctx,W,H,map,ylims,labelY,labelX){
   ctx.save();
-  // frame
+  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--plot-bg'); ctx.fillRect(0,0,W,H);
   ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--plot-frame'); ctx.lineWidth=1; ctx.strokeRect(30,10,W-40,H-40);
-  // grid
-  const {ext}=map; const xT=ticks(ext.minx,ext.maxx,8); const yT=ticks(ylims.min, ylims.max, 5);
+  const {ext}=map; const xT=ticks(ext.minx,ext.maxx,8); const yT=ticks(ylims.min, ylims.max, 6);
   ctx.beginPath();
   xT.vals.forEach(v=>{ const x=map.X(v); if(x>=30 && x<=W-10){ ctx.moveTo(x, 10); ctx.lineTo(x, H-30);} });
   yT.vals.forEach(v=>{ const y = 10 + (ylims.max-v)/(ylims.max-ylims.min)*(H-40); ctx.moveTo(30,y); ctx.lineTo(W-10,y); });
   ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--plot-grid'); ctx.stroke();
-
-  // labels
-  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--plot-text');
-  ctx.font='13px system-ui, ui-sans-serif, Segoe UI';
-  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillStyle='#0b1220'; ctx.font='13px system-ui, ui-sans-serif, Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='top';
   xT.vals.forEach(v=>{ const x=map.X(v); if(x>=30 && x<=W-10) ctx.fillText(fmtTick(v), x, H-26); });
   ctx.textAlign='right'; ctx.textBaseline='middle';
   yT.vals.forEach(v=>{ const y = 10 + (ylims.max-v)/(ylims.max-ylims.min)*(H-40); if(y>=10 && y<=H-30) ctx.fillText(fmtTick(v), 28, y); });
-
   if(labelX){ ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillText(labelX, W/2, H-8); }
   if(labelY){ ctx.save(); ctx.translate(14,H/2); ctx.rotate(-Math.PI/2); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(labelY, 0,0); ctx.restore(); }
   ctx.restore();
 }
 function exportPNG(canvasId, filename){ const c=document.getElementById(canvasId); const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=filename; a.click(); }
 function drawSupportIcon(ctx, x, y, type, scale=1){
-  const stroke = '#93c5fd', fill = '#93c5fd'; const triH=12*scale, triW=16*scale;
+  const stroke = '#3b82f6', fill = '#3b82f6'; const triH=12*scale, triW=16*scale;
   if(type==='pin'){ ctx.fillStyle=fill; ctx.strokeStyle=stroke; ctx.beginPath(); ctx.moveTo(x,y+4*scale); ctx.lineTo(x-triW/2,y+4*scale+triH); ctx.lineTo(x+triW/2,y+4*scale+triH); ctx.closePath(); ctx.fill(); ctx.stroke(); }
   else if(type==='rollerZ'){ ctx.fillStyle=fill; ctx.strokeStyle=stroke; ctx.beginPath(); ctx.moveTo(x,y+4*scale); ctx.lineTo(x-triW/2,y+4*scale+triH); ctx.lineTo(x+triW/2,y+4*scale+triH); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(x,y+4*scale+triH+6*scale,4*scale,0,Math.PI*2); ctx.fill(); ctx.stroke(); }
   else if(type==='fixed'){ ctx.fillStyle=fill; ctx.fillRect(x-7*scale,y+4*scale,14*scale,10*scale); }
@@ -404,40 +632,24 @@ function drawStacked(){
   if(model.nodes.length===0){ return; }
   const map=worldToScreenInline(W,H);
   const ext=map.ext; const legend=document.getElementById('legendGeom'); if(legend) legend.textContent=`1 px = ${map.invS.toFixed(3)} m`;
-
   const zmin=Math.min(ext.minz-0.5, -1), zmax=Math.max(ext.maxz+0.5, 1);
   drawAxisInline(ctx,W,H,map,{min:zmin,max:zmax},'z [m]','x [m]');
-
-  // bars
   ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--blue'); ctx.lineWidth=2;
   for(const b of model.bars){ const ni=model.nodes.find(n=>n.id===b.i), nj=model.nodes.find(n=>n.id===b.j); if(!ni||!nj) continue;
     const y1 = 10 + (zmax-ni.z)/(zmax-zmin)*(H-40), y2 = 10 + (zmax-nj.z)/(zmax-zmin)*(H-40);
-    ctx.beginPath(); ctx.moveTo(map.X(ni.x), y1); ctx.lineTo(map.X(nj.x), y2); ctx.stroke();
-  }
-  // nodes
-  ctx.fillStyle='#c7e0ff'; for(const n of model.nodes){ const px=map.X(n.x); const py=10 + (zmax-n.z)/(zmax-zmin)*(H-40); ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2); ctx.fill(); }
-
-  // supports
-  for(const spt of model.supports){ const n=model.nodes.find(n=>n.id===spt.node); if(!n) continue; const type=spt.type || inferSupportType(spt); const px=map.X(n.x); const py=10 + (zmax-n.z)/(zmax-zmin)*(H-40); drawSupportIcon(ctx, px, py, type, 1); }
-
-  // loads (Fz & moments) + UDLs
+    ctx.beginPath(); ctx.moveTo(map.X(ni.x), y1); ctx.lineTo(map.X(nj.x), y2); ctx.stroke(); }
+  ctx.fillStyle='#0b1220'; for(const n of model.nodes){ const px=map.X(n.x); const py=10 + (zmax-n.z)/(zmax-zmin)*(H-40); ctx.beginPath(); ctx.arc(px,py,3.5,0,Math.PI*2); ctx.fill(); }
+  for(const spt of model.supports){ const n=model.nodes.find(n=>n.id===spt.node); if(!n) continue; const type=spt.type || inferSupportType(spt); const px=map.X(n.x); const py=10 + (zmax-n.z)/(zmax-zmin)*(H-40); drawSupportIcon(ctx, px, py, type, 0.9); }
   ctx.strokeStyle='#ef4444'; ctx.fillStyle='#ef4444'; ctx.lineWidth=2; ctx.font='12px system-ui';
   for(const l of model.nodeloads){ const n=model.nodes.find(n=>n.id===l.node); if(!n) continue; const px=map.X(n.x); const baseY=10 + (zmax-n.z)/(zmax-zmin)*(H-40);
-    if(l.Fz){ const dir = l.Fz>=0 ? 1 : -1; const y2 = baseY + 40*dir; ctx.beginPath(); ctx.moveTo(px, baseY); ctx.lineTo(px, y2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(px-5, y2-5*dir); ctx.lineTo(px+5, y2-5*dir); ctx.lineTo(px, y2+7*dir); ctx.closePath(); ctx.fill(); ctx.fillText(`${l.Fz.toFixed(3)} kN`, px+6, baseY + (dir>0?26:-26)); }
-    if(l.M){ const radius=16, ccw = l.M>=0; ctx.beginPath(); ctx.arc(px, baseY-20, radius, ccw?Math.PI:0, ccw?2*Math.PI:Math.PI, ccw); ctx.strokeStyle='#a78bfa'; ctx.stroke(); ctx.beginPath(); if(ccw){ ctx.moveTo(px+radius, baseY-20); ctx.lineTo(px+radius-6, baseY-24); ctx.lineTo(px+radius-6, baseY-16);} else { ctx.moveTo(px-radius, baseY-20); ctx.lineTo(px-radius+6, baseY-24); ctx.lineTo(px-radius+6, baseY-16);} ctx.fillStyle='#a78bfa'; ctx.fill(); ctx.fillText(`${l.M.toFixed(3)} kNm`, px+radius+6, baseY-20); }
-  }
-  // UDLs
-  ctx.fillStyle='rgba(239,68,68,.16)'; ctx.strokeStyle='#ef4444';
-  for(const u of model.udls){ const b=model.bars.find(bb=>bb.id===u.bar); if(!b) continue; const ni=model.nodes.find(n=>n.id===b.i), nj=model.nodes.find(n=>n.id===b.j); const y=10 + (zmax-ni.z)/(zmax-zmin)*(H-40); const x1=map.X(ni.x), x2=map.X(nj.x); const h=22; ctx.fillRect(Math.min(x1,x2), y-h-8, Math.abs(x2-x1), h); ctx.strokeRect(Math.min(x1,x2), y-h-8, Math.abs(x2-x1), h); ctx.fillStyle='#fca5a5'; ctx.fillText(`${u.w.toFixed(3)} kN/m`, (x1+x2)/2-28, y-h-12); ctx.fillStyle='rgba(239,68,68,.16)'; }
+    if(l.Fz){ const dir = l.Fz>=0 ? 1 : -1; const y2 = baseY + 36*dir; ctx.beginPath(); ctx.moveTo(px, baseY); ctx.lineTo(px, y2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(px-5, y2-5*dir); ctx.lineTo(px+5, y2-5*dir); ctx.lineTo(px, y2+7*dir); ctx.closePath(); ctx.fill(); ctx.fillText(`${l.Fz.toFixed(1)} kN`, px+6, baseY + (dir>0?22:-22)); }
+    if(l.M){ const radius=14, ccw = l.M>=0; ctx.beginPath(); ctx.arc(px, baseY-20, radius, ccw?Math.PI:0, ccw?2*Math.PI:Math.PI, ccw); ctx.strokeStyle='#a78bfa'; ctx.stroke(); ctx.beginPath(); if(ccw){ ctx.moveTo(px+radius, baseY-20); ctx.lineTo(px+radius-6, baseY-24); ctx.lineTo(px+radius-6, baseY-16);} else { ctx.moveTo(px-radius, baseY-20); ctx.lineTo(px-radius+6, baseY-24); ctx.lineTo(px-radius+6, baseY-16);} ctx.fillStyle='#a78bfa'; ctx.fill(); ctx.fillText(`${l.M.toFixed(1)} kNm`, px+radius+6, baseY-20); } }
+  if(_lastResult){ const R=computeReactions(_lastResult); ctx.strokeStyle='#f43f5e'; ctx.fillStyle='#f43f5e'; ctx.lineWidth=2; for(const r of R){ const n=model.nodes.find(nn=>nn.id===r.node); if(!n) continue; const px=map.X(n.x); const py=10 + (zmax-n.z)/(zmax-zmin)*(H-40); if(Math.abs(r.Fz)>1e-6){ const dir = r.Fz<=0 ? 1 : -1; const y2=py + 36*dir; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, y2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(px-5, y2-5*dir); ctx.lineTo(px+5, y2-5*dir); ctx.lineTo(px, y2+7*dir); ctx.closePath(); ctx.fill(); ctx.fillText(`${r.Fz.toFixed(1)} kN`, px+6, py + (dir>0?22:-22)); } if(Math.abs(r.M)>1e-6){ const radius=14, ccw = r.M>=0; ctx.beginPath(); ctx.arc(px, py+22, radius, ccw?0:Math.PI, ccw?Math.PI:0, ccw); ctx.strokeStyle='#a78bfa'; ctx.stroke(); ctx.beginPath(); if(ccw){ ctx.moveTo(px+radius, py+22); ctx.lineTo(px+radius-6, py+18); ctx.lineTo(px+radius-6, py+26);} else { ctx.moveTo(px-radius, py+22); ctx.lineTo(px-radius+6, py+18); ctx.lineTo(px-radius+6, py+26);} ctx.fillStyle='#a78bfa'; ctx.fill(); ctx.fillText(`${r.M.toFixed(1)} kNm`, px+radius+6, py+22); } } }
 
-  // Reactions (from analysis)
-  if(_lastResult){ const R=computeReactions(_lastResult); ctx.strokeStyle='#f43f5e'; ctx.fillStyle='#f43f5e'; ctx.lineWidth=2; for(const r of R){ const n=model.nodes.find(nn=>nn.id===r.node); if(!n) continue; const px=map.X(n.x); const py=10 + (zmax-n.z)/(zmax-zmin)*(H-40); if(Math.abs(r.Fz)>1e-6){ const dir = r.Fz<=0 ? 1 : -1; const y2=py + 40*dir; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, y2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(px-5, y2-5*dir); ctx.lineTo(px+5, y2-5*dir); ctx.lineTo(px, y2+7*dir); ctx.closePath(); ctx.fill(); ctx.fillText(`${r.Fz.toFixed(3)} kN`, px+6, py + (dir>0?26:-26)); } if(Math.abs(r.M)>1e-6){ const radius=16, ccw = r.M>=0; ctx.beginPath(); ctx.arc(px, py+24, radius, ccw?0:Math.PI, ccw?Math.PI:0, ccw); ctx.strokeStyle='#a78bfa'; ctx.stroke(); ctx.beginPath(); if(ccw){ ctx.moveTo(px+radius, py+24); ctx.lineTo(px+radius-6, py+20); ctx.lineTo(px+radius-6, py+28);} else { ctx.moveTo(px-radius, py+24); ctx.lineTo(px-radius+6, py+20); ctx.lineTo(px-radius+6, py+28);} ctx.fillStyle='#a78bfa'; ctx.fill(); ctx.fillText(`${r.M.toFixed(3)} kNm`, px+radius+6, py+24); } } }
-
-  // === Internal diagrams ===
   const plots=[
     {id:'stackNormal', labelY:'N [kN]', extractor:(e)=>{ const be=_lastResult?.barEndForces.find(q=>q.id===e.id); if(!be) return null; const Ni = -be.ql.get([0,0])/1000; const Nj = be.ql.get([3,0])/1000; return {Ni, Nj, type:'const'}; }},
     {id:'stackShear',  labelY:'V [kN]', extractor:(e)=>{ const be=_lastResult?.barEndForces.find(q=>q.id===e.id); if(!be) return null; const Vi =  be.ql.get([1,0])/1000; const Vj = -be.ql.get([4,0])/1000; const w = e.wLocal_kNm||0; return {Vi, Vj, w, type:'linear'}; }},
-    {id:'stackMoment', labelY:'M [kNm]', extractor:(e)=>{ const be=_lastResult?.barEndForces.find(q=>q.id===e.id); if(!be) return null; const Vi=be.ql.get([1,0])/1000; const Mi=be.ql.get([2,0])/1000; const w=(e.wLocal_kNm||0); /* kN/m */ return {Mi, Vi, w, type:'quad'}; }},
+    {id:'stackMoment', labelY:'M [kNm]', extractor:(e)=>{ const be=_lastResult?.barEndForces.find(q=>q.id===e.id); if(!be) return null; const Vi=be.ql.get([1,0])/1000; const Mi=be.ql.get([2,0])/1000; const w=(e.wLocal_kNm||0); return {Mi, Vi, w, type:'quad'}; }},
     {id:'stackDeflection', labelY:'v [mm]', extractor:(e)=>{ const be=_lastResult?.barEndForces.find(q=>q.id===e.id); if(!be) return null; const Ul=be.Ul; const L=e.L; function vAt(x){ const xi=x/L; const vi=Ul.get([1,0]),thi=Ul.get([2,0]),vj=Ul.get([4,0]),thj=Ul.get([5,0]); const N1=1-3*xi*xi+2*xi*xi*xi, N2=L*(xi-2*xi*xi+xi*xi*xi), N3=3*xi*xi-2*xi*xi*xi, N4=L*(-xi*xi+xi*xi*xi); return (N1*vi + N2*thi + N3*vj + N4*thj)*1000; } return {vAt, L, type:'defl'}; }},
   ];
 
@@ -457,13 +669,12 @@ function drawStacked(){
     const mapP=worldToScreenInline(Wp,Hp);
     drawAxisInline(cc,Wp,Hp,mapP,{min:ymin,max:ymax}, p.labelY,'x [m]');
 
-    // draw shape
     cc.lineWidth=2;
     let col = getComputedStyle(document.documentElement).getPropertyValue('--green');
     if(p.id==='stackMoment') col=getComputedStyle(document.documentElement).getPropertyValue('--purple');
-    if(p.id==='stackShear') col='#22d3ee';
-    if(p.id==='stackNormal') col='#fb7185';
-    cc.strokeStyle=col; cc.fillStyle='rgba(255,255,255,.08)';
+    if(p.id==='stackShear') col='#06b6d4';
+    if(p.id==='stackNormal') col='#ef4444';
+    cc.strokeStyle=col; cc.fillStyle='rgba(59,130,246,.10)';
 
     for(const e of _lastResult.geom){
       const ni=model.nodes.find(n=>n.id===e.i), nj=model.nodes.find(n=>n.id===e.j); if(!ni||!nj) continue;
@@ -472,7 +683,7 @@ function drawStacked(){
 
       if(p.id!=='stackDeflection'){
         cc.beginPath(); cc.moveTo(mapP.X(x1), Y(0));
-        const samples=100;
+        const samples=120;
         for(let k=0;k<=samples;k++){
           const t=k/samples; const x=t*L;
           let val=0; const d=p.extractor(e);
@@ -484,36 +695,113 @@ function drawStacked(){
         cc.lineTo(mapP.X(x2), Y(0)); cc.closePath(); cc.fill(); cc.stroke();
       } else {
         cc.beginPath();
-        const samples=140; for(let k=0;k<=samples;k++){ const t=k/samples; const x=t*L; const v=p.extractor(e).vAt(x); const wx=mapP.X(x1 + t*(x2-x1)); const wy=Y(v); if(k===0) cc.moveTo(wx,wy); else cc.lineTo(wx,wy); }
+        const scale = parseFloat(document.getElementById('deflScaleInput')?.value)||1;
+        const samples=160; for(let k=0;k<=samples;k++){ const t=k/samples; const x=t*L; const v=p.extractor(e).vAt(x)*scale; const wx=mapP.X(x1 + t*(x2-x1)); const wy=Y(v); if(k===0) cc.moveTo(wx,wy); else cc.lineTo(wx,wy); }
         cc.stroke();
       }
     }
   }
+
+  /* ---- Buckling utilization plot ---- */
+  const cvb=document.getElementById('stackBuckling'); const Wb=cvb.width=cvb.clientWidth, Hb=cvb.height=cvb.clientHeight; const cb=cvb.getContext('2d'); cb.clearRect(0,0,Wb,Hb);
+  if(!_lastResult){ drawAxisInline(cb,Wb,Hb, worldToScreenInline(Wb,Hb), {min:0,max:1}, 'η [–]','x [m]'); return; }
+  let ymax=1.0; for(const b of model.bars){ const bk=bucklingForBar(_lastResult,b); if(bk) ymax=Math.max(ymax, bk.util*1.1); }
+  const mapB=worldToScreenInline(Wb,Hb);
+  drawAxisInline(cb,Wb,Hb,mapB,{min:0,max:ymax}, 'η [–]','x [m]');
+  cb.lineWidth=2; cb.strokeStyle='#ef4444'; cb.fillStyle='rgba(239,68,68,0.12)';
+  for(const e of _lastResult.geom){
+    const b=model.bars.find(bb=>bb.id===e.id); const bk=bucklingForBar(_lastResult,b); if(!bk || bk.util<=0) continue;
+    const ni=model.nodes.find(n=>n.id===e.i), nj=model.nodes.find(n=>n.id===e.j); if(!ni||!nj) continue;
+    const x1=Math.min(ni.x,nj.x), x2=Math.max(ni.x,nj.x);
+    const Y=v=> 10 + (ymax - v)/(ymax - 0)*(Hb-40);
+    const isVertical = Math.abs(e.s) > 0.5;
+    cb.beginPath(); cb.moveTo(mapB.X(x1), Y(0)); cb.lineTo(mapB.X(x1), Y(bk.util)); cb.lineTo(mapB.X(x2), Y(bk.util)); cb.lineTo(mapB.X(x2), Y(0)); cb.closePath();
+    cb.fillStyle = isVertical ? 'rgba(239,68,68,0.18)' : 'rgba(148,163,184,0.15)';
+    cb.strokeStyle = isVertical ? '#ef4444' : '#94a3b8';
+    cb.fill(); cb.stroke();
+  }
 }
 
-/* ============= Run + KPIs + orchestrator ============= */
-function drawEverything(){ drawStacked(); }
-function run(){ const res=assembleAndSolve(); if(!res) return; _lastResult=res; const max=maximaGlobal(res); document.getElementById('kpiMoment').textContent=`${Math.abs(max.M.val).toFixed(2)} kNm`; document.getElementById('kpiMomentLoc').textContent=`B${max.M.bar} @ x=${max.M.x.toFixed(3)} m`; document.getElementById('kpiShear').textContent=`${Math.abs(max.V.val).toFixed(2)} kN`; document.getElementById('kpiShearLoc').textContent=`B${max.V.bar} end ${max.V.where.toUpperCase()}`; document.getElementById('kpiDefl').textContent=`${Math.abs(max.defl.val).toFixed(3)} mm`; document.getElementById('kpiDeflLoc').textContent=`B${max.defl.bar} @ x=${max.defl.x.toFixed(3)} m`; document.getElementById('kpiElems').textContent=`${model.bars.length}`; drawEverything(); showTab(document.querySelector('.tab.active')?.dataset.tab || 'summary'); }
+/* ====================== Reactive run ====================== */
+function updateKPIs(res){
+  if(!res){ document.getElementById('kpiMoment').textContent = '–'; document.getElementById('kpiShear').textContent = '–'; document.getElementById('kpiDefl').textContent = '–'; document.getElementById('kpiElems').textContent = '–'; return; }
+  const max = maximaGlobal(res);
+  document.getElementById('kpiMoment').textContent = `${Math.abs(max.M.val).toFixed(2)} kNm`;
+  document.getElementById('kpiMomentLoc').textContent = `B${max.M.bar} @ x=${max.M.x.toFixed(3)} m`;
+  document.getElementById('kpiShear').textContent = `${Math.abs(max.V.val).toFixed(2)} kN`;
+  document.getElementById('kpiShearLoc').textContent = `B${max.V.bar} end ${max.V.where.toUpperCase()}`;
+  document.getElementById('kpiDefl').textContent = `${Math.abs(max.defl.val).toFixed(3)} mm`;
+  document.getElementById('kpiDeflLoc').textContent = `B${max.defl.bar} @ x=${max.defl.x.toFixed(3)} m`;
+  document.getElementById('kpiElems').textContent = `${model.bars.length}`;
+}
+function touch(throttle=true){ if(throttle){ clearTimeout(_touchTimer); _touchTimer=setTimeout(()=>{ const res=assembleAndSolve(); _lastResult=res; updateKPIs(res); drawStacked(); showTab(document.querySelector('.tab.active')?.dataset.tab || 'summary'); }, 30); } else { const res=assembleAndSolve(); _lastResult=res; updateKPIs(res); drawStacked(); showTab(document.querySelector('.tab.active')?.dataset.tab || 'summary'); } }
 
-/* ====================== Samples ====================== */
-function loadSample(){ model.materials=[{id:1,name:'Steel S355',E:210,rho:78.5}]; model.nodes=[{id:1,x:0,z:0},{id:2,x:5,z:0},{id:3,x:10,z:0}]; model.bars=[{id:1,i:1,j:2,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}},{id:2,i:2,j:3,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}}]; model.supports=[{node:1,ux:true,uz:true,rz:true,type:'fixed'},{node:3,ux:false,uz:true,rz:false,type:'rollerZ'}]; model.nodeloads=[{node:2,Fx:0,Fz:-50,M:0}]; model.udls=[{bar:1,w:-5}]; renderAll(); }
-function loadCantilever(){ model.materials=[{id:1,name:'Steel',E:210,rho:78.5}]; model.nodes=[{id:1,x:0,z:0},{id:2,x:5,z:0}]; model.bars=[{id:1,i:1,j:2,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}}]; model.supports=[{node:1,ux:true,uz:true,rz:true,type:'fixed'}]; model.nodeloads=[{node:2,Fx:0,Fz:-50,M:0}]; model.udls=[]; renderAll(); }
-function loadSimplySupported(){ model.materials=[{id:1,name:'Steel',E:210,rho:78.5}]; model.nodes=[{id:1,x:0,z:0},{id:2,x:6,z:0}]; model.bars=[{id:1,i:1,j:2,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}}]; model.supports=[{node:1,ux:true,uz:true,rz:false,type:'pin'},{node:2,ux:false,uz:true,rz:false,type:'rollerZ'}]; model.nodeloads=[]; model.udls=[{bar:1,w:-10}]; renderAll(); }
-function loadPortalFrame(){ model.materials=[{id:1,name:'Steel',E:210,rho:78.5}]; model.nodes=[{id:1,x:0,z:0},{id:2,x:0,z:4},{id:3,x:6,z:4},{id:4,x:6,z:0}]; model.bars=[
-  {id:1,i:1,j:2,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}},
-  {id:2,i:2,j:3,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}},
-  {id:3,i:3,j:4,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}}
-]; model.supports=[{node:1,ux:true,uz:true,rz:true,type:'fixed'},{node:4,ux:true,uz:true,rz:true,type:'fixed'}]; model.nodeloads=[{node:2,Fx:20,Fz:0,M:0}]; model.udls=[]; renderAll(); }
-function loadTwoSpan(){ model.materials=[{id:1,name:'Steel',E:210,rho:78.5}]; model.nodes=[{id:1,x:0,z:0},{id:2,x:5,z:0},{id:3,x:10,z:0}]; model.bars=[{id:1,i:1,j:2,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}},{id:2,i:2,j:3,matId:1,A:0.02,I:8e-5,releaseI:{rz:false},releaseJ:{rz:false}}]; model.supports=[{node:1,ux:true,uz:true,rz:true,type:'fixed'},{node:3,ux:false,uz:true,rz:true,type:'fixed'}]; model.nodeloads=[{node:2,Fx:0,Fz:-50,M:0}]; model.udls=[]; renderAll(); }
+/* ====================== Examples ====================== */
+function A_rhs(b,h,t){return I_rhs(b,h,t);}
+function loadCantilever(){
+  model.materials=[{id:1,name:'Steel S355',E:210,rho:78.5,fy:355}];
+  model.nodes=[{id:1,x:0,z:0},{id:2,x:5,z:0}];
+  model.bars=[{id:1,i:1,j:2,matId:1,A: (1000*1000), I: (1000), sectionKey:'', releaseI:{rz:false},releaseJ:{rz:false}}];
+  // better: realistic RHS
+  model.bars=[{id:1,i:1,j:2,matId:1,A: A_rhs(150,50,5), I: I_rhs(150,50,5), sectionKey:'RHS 150x50x5', releaseI:{rz:false},releaseJ:{rz:false}}];
+  model.supports=[{node:1,ux:true,uz:true,rz:true,type:'fixed'}];
+  model.nodeloads=[{node:2,Fx:0,Fz:-50,M:0}];
+  model.udls=[]; renderAll();
+}
+function loadSimplySupported(){
+  model.materials=[{id:1,name:'Steel S355',E:210,rho:78.5,fy:355}];
+  model.nodes=[{id:1,x:0,z:0},{id:2,x:6,z:0}];
+  model.bars=[{id:1,i:1,j:2,matId:1,A: A_shs(100,5), I: I_shs(100,5), sectionKey:'SHS 100x100x5', releaseI:{rz:false},releaseJ:{rz:false}}];
+  model.supports=[{node:1,ux:true,uz:true,rz:false,type:'pin'},{node:2,ux:false,uz:true,rz:false,type:'rollerZ'}];
+  model.nodeloads=[]; model.udls=[{bar:1,w:-10}]; renderAll();
+}
+function loadPortalFrame(){
+  model.materials=[{id:1,name:'Steel S355',E:210,rho:78.5,fy:355}];
+  model.nodes=[{id:1,x:0,z:0},{id:2,x:0,z:4},{id:3,x:6,z:4},{id:4,x:6,z:0}];
+  model.bars=[
+    {id:1,i:1,j:2,matId:1,A:A_shs(100,5),I:I_shs(100,5),sectionKey:'SHS 100x100x5',releaseI:{rz:false},releaseJ:{rz:false}},
+    {id:2,i:2,j:3,matId:1,A:A_ibeam(165,10.0,285,7.5),I:I_ibeam(165,10.0,285,7.5),sectionKey:'I 305x165x46',releaseI:{rz:false},releaseJ:{rz:false}},
+    {id:3,i:3,j:4,matId:1,A:A_shs(100,5),I:I_shs(100,5),sectionKey:'SHS 100x100x5',releaseI:{rz:false},releaseJ:{rz:false}}
+  ];
+  model.supports=[{node:1,ux:true,uz:true,rz:true,type:'fixed'},{node:4,ux:true,uz:true,rz:true,type:'fixed'}];
+  model.nodeloads=[{node:2,Fx:20,Fz:0,M:0}];
+  model.udls=[]; renderAll();
+}
+function loadTwoSpan(){
+  model.materials=[{id:1,name:'Steel S355',E:210,rho:78.5,fy:355}];
+  model.nodes=[{id:1,x:0,z:0},{id:2,x:5,z:0},{id:3,x:10,z:0}];
+  model.bars=[
+    {id:1,i:1,j:2,matId:1,A:A_rhs(150,50,5),I:I_rhs(150,50,5),sectionKey:'RHS 150x50x5',releaseI:{rz:false},releaseJ:{rz:false}},
+    {id:2,i:2,j:3,matId:1,A:A_rhs(150,50,5),I:I_rhs(150,50,5),sectionKey:'RHS 150x50x5',releaseI:{rz:false},releaseJ:{rz:false}}
+  ];
+  model.supports=[{node:1,ux:true,uz:true,rz:true,type:'fixed'},{node:3,ux:false,uz:true,rz:true,type:'fixed'}];
+  model.nodeloads=[{node:2,Fx:0,Fz:-50,M:0}];
+  model.udls=[]; renderAll();
+}
+function loadSPMT(){
+  const spacing=1.6; const lines=6; const overhang=1.2;
+  const n=[]; for(let i=0;i<=lines;i++){ n.push({id:i+1, x:i*spacing, z:0}); }
+  n.push({id:lines+2, x:lines*spacing+overhang, z:0});
+  const bars=[]; for(let i=1;i<n.length;i++){
+    bars.push({id:i, i:i, j:i+1, matId:1, A:A_rhs(200,100,6.3), I:I_rhs(200,100,6.3), sectionKey:'RHS 200x100x6.3', releaseI:{rz:false}, releaseJ:{rz:false}});
+  }
+  const supports=[{node:1,ux:true,uz:true,rz:false,type:'pin'}];
+  for(let i=2;i<=lines+1;i++){ supports.push({node:i,ux:false,uz:true,rz:false,type:'rollerZ'}); }
+  const loads=[{node:lines+2,Fx:0,Fz:-120,M:0}];
+  const udls=[]; for(let i=1;i<=bars.length;i++){ udls.push({bar:i,w:-8}); }
+  model.materials=[{id:1,name:'Steel S355',E:210,rho:78.5,fy:355}];
+  model.nodes=n; model.bars=bars; model.supports=supports; model.nodeloads=loads; model.udls=udls;
+  renumber(); renderAll();
+}
+function onExampleSelect(e){ const v=e.target.value; if(v==='cantilever') loadCantilever(); else if(v==='ss_udl') loadSimplySupported(); else if(v==='portal') loadPortalFrame(); else if(v==='two_span') loadTwoSpan(); else if(v==='spmt') loadSPMT(); }
 
-/* Init */
-function init(){
-  document.getElementById('btnSample').addEventListener('click', loadSample);
-  document.getElementById('btnRun').addEventListener('click', run);
-  bindTabs();
-  if(model.materials.length===0) addMaterial();
-  if(model.nodes.length===0){ addNode(); addNode(); }
-  drawEverything();
+/* ====================== Init ====================== */
+function init(){ buildMatLib(); document.getElementById('exampleSelect').addEventListener('change', onExampleSelect); bindTabs();
+  if(model.materials.length===0){ model.materials=[{id:1,name:'Steel S355',E:210,rho:78.5,fy:355}]; }
+  if(model.nodes.length===0){ model.nodes=[{id:1,x:0,z:0},{id:2,x:4,z:0}]; }
+  if(model.bars.length===0){ model.bars=[{id:1,i:1,j:2,matId:1,A:A_rhs(150,50,5),I:I_rhs(150,50,5),sectionKey:'RHS 150x50x5',releaseI:{rz:false},releaseJ:{rz:false}}]; }
+  if(model.supports.length===0){ model.supports=[{node:1,ux:true,uz:true,rz:false,type:'pin'},{node:2,ux:false,uz:true,rz:false,type:'rollerZ'}]; }
+  renderAll();
 }
 window.addEventListener('load', init);
 </script>
